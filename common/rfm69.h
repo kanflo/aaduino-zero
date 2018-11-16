@@ -136,7 +136,7 @@ void rfm69_dumpRegisters(void);
 
 void rfm69_setPASettings(uint8_t forcePA);
 
-bool rfm69_setAESEncryption(const void* aesKey, unsigned int keyLength);
+bool rfm69_setAESEncryption(uint8_t* aesKey, unsigned int keyLength);
 
 uint8_t rfm69_readRegister(uint8_t reg);
 void rfm69_writeRegister(uint8_t reg, uint8_t value);

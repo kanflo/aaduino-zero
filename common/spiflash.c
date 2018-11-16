@@ -173,9 +173,6 @@ bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
 
 bool spiflash_erase(uint32_t address, uint32_t length)
 {
-    #warning spiflash_erase not implemented
-    (void) address;
-    (void) length;
     bool success = false;
 #if 0
     if (flash_idx >= 0) {
@@ -208,7 +205,6 @@ bool spiflash_erase(uint32_t address, uint32_t length)
 
 bool spiflash_chip_erase(void)
 {
-    #warning spiflash_chip_erase not implemented
     bool success = false;
 #if 0
     if (flash_idx >= 0) {

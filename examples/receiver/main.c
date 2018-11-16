@@ -101,8 +101,8 @@ int main(void)
 
     (void) tmp102_init();
 
-//    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
-//    rfm69_reset();
+    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
+    rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
         dbg_printf("No RFM69CW found\n");
         blinken_halt(1);

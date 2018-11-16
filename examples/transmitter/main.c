@@ -64,12 +64,13 @@ static void blinken_halt(uint32_t blink_count)
 int main(void)
 {
     uint32_t counter = 0;
+    uint32_t period = 10;
     hw_init(0);
     dbg_printf("\n\nWelcome to the AAduino Zero Transmitter Example\n");
     (void) tmp102_init();
 
-//    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
-//    rfm69_reset();
+    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
+    rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
         dbg_printf("No RFM69CW found\n");
         blinken_halt(2);
@@ -84,19 +85,8 @@ int main(void)
         rfm69link_setNodeId(NODE_ID);
     }
 
-    dbg_printf("Transmitting temperature and battery voltage every 2 seconds.\n");
+    dbg_printf("Transmitting temperature and battery voltage every %d seconds.\n", period);
 
-#if 0
-    while(1) {
-        rfm69_link_frame_t frame;
-        uint8_t src, dst, length;
-        if (rfm69link_receiveFrame(&src, &dst, &frame, &length)) {
-            hw_set_led(true);
-            dbg_printf("%02d -> %02d (%d)\n", src, dst, length);
-            hw_set_led(false);
-        }
-    }
-#endif
     while(1) {
         // Send a frame formatted as
         //  <to:8> <from:8> <counter:8> <type:8> <temperature:32> <vcc:16>
@@ -126,7 +116,7 @@ int main(void)
         }
         hw_set_led(false);
         // TODO: Use low power sleep ;)
-        delay_ms(2000);
+        delay_ms(period * 1000);
         counter++;
     }
     return 0;

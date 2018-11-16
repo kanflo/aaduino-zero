@@ -79,7 +79,6 @@
 
 /**
   * @brief Initialize the hardware
-  * @param usart_rx_buf pointer to UART ring buffer, may be null.
   * @retval None
   */
 void hw_init(ringbuf_t *usart_rx_buf);

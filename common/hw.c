@@ -32,11 +32,12 @@
 #include <usart.h>
 #include <i2c.h>
 #include <spi.h>
+#include <flash.h>
 #include "dbg_printf.h"
 #include "tick.h"
 #include "sw_i2c.h"
 #include "hw.h"
-
+#include "spi_driver.h"
 
 static void tim2_init(void);
 static void clock_init(void);
@@ -47,12 +48,12 @@ static void i2c_init(void);
 static void spi_init(void);
 static void adc_init(void);
 static void lse_init(void);
+//static void button_irq_init(void);
 
 static ringbuf_t *rx_buf;
 
 
 /**
-  * @brief Initialize the hardware
   * @param usart_rx_buf pointer to UART ring buffer, may be null.
   * @retval None
   */
@@ -120,12 +121,72 @@ void adc_disable(void)
   */
 static void clock_init(void)
 {
-    /* jump up to 16mhz, leave PLL setup for later. */
+    /** Jump up to 16mhz using HSI16 as we don't have an HSE
+      *  Currently no support for HSI16 in rcc_clock_setup_pll(...)
+      *  @todo: enable PLL
+      */
+#if 0
+    /* Turn on the appropriate source for the PLL */
+    if (clock->pll_source == RCC_CFGR_PLLSRC_HSE_CLK) {
+        rcc_osc_on(RCC_HSE);
+        rcc_wait_for_osc_ready(RCC_HSE);
+    } else {
+        rcc_osc_on(RCC_HSI16);
+        rcc_wait_for_osc_ready(RCC_HSI16);
+    }
+
+    rcc_set_hpre(clock->hpre);
+    rcc_set_ppre1(clock->ppre1);
+    rcc_set_ppre2(clock->ppre2);
+
+    rcc_periph_clock_enable(RCC_PWR);
+    pwr_set_vos_scale(clock->voltage_scale);
+
+    rcc_osc_off(RCC_PLL);
+    while (rcc_is_osc_ready(RCC_PLL));
+
+    flash_prefetch_enable();
+    flash_set_ws(clock->flash_waitstates);
+
+    /* Set up the PLL */
+    rcc_set_pll_multiplier(clock->pll_mul);
+    rcc_set_pll_divider(clock->pll_div);
+    rcc_set_pll_source(clock->pll_source);
+
+    rcc_osc_on(RCC_PLL);
+    rcc_wait_for_osc_ready(RCC_PLL);
+    rcc_set_sysclk_source(RCC_PLL);
+
+    /* Set the peripheral clock frequencies used. */
+    rcc_ahb_frequency = clock->ahb_frequency;
+    rcc_apb1_frequency = clock->apb1_frequency;
+    rcc_apb2_frequency = clock->apb2_frequency;
+#else
     rcc_osc_on(RCC_HSI16);
     rcc_wait_for_osc_ready(RCC_HSI16);
-    rcc_set_sysclk_source(RCC_HSI16);
 
-//    rcc_clock_setup_in_hsi_out_48mhz();
+
+    rcc_osc_off(RCC_PLL);
+    while (rcc_is_osc_ready(RCC_PLL));
+    flash_prefetch_enable();
+    flash_set_ws(0);
+
+#warning "*** Add mode for 4MHz HSI16 mode ***"
+
+    /* Set up the PLL */
+    rcc_set_pll_multiplier(RCC_CFGR_PLLMUL_MUL4);
+    rcc_set_pll_divider(RCC_CFGR_PLLDIV_DIV4);
+    rcc_set_pll_source(0 /** RCC_CFGR_PLLSRC_HSI_CLK */);
+
+    rcc_osc_on(RCC_PLL);
+    rcc_wait_for_osc_ready(RCC_PLL);
+    rcc_set_sysclk_source(RCC_PLL);
+
+    rcc_set_sysclk_source(RCC_HSI16);
+    rcc_ahb_frequency = 16000000;
+    rcc_apb1_frequency = 16000000;
+    rcc_apb2_frequency = 16000000;
+#endif
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
     rcc_periph_clock_enable(RCC_GPIOC);
@@ -141,7 +202,7 @@ static void clock_init(void)
   */
 static void i2c_init(void)
 {
-#if 1
+#if 0
     sw_i2c_init();
 #else
     i2c_reset(I2C1);
@@ -157,7 +218,7 @@ static void i2c_init(void)
 
     i2c_peripheral_disable(I2C1);
 
-
+    /** @todo: clean this mess up... */
     /* APB1 is running at 16MHz. */
 //    i2c_set_clock_frequency(I2C1, I2C_CR2_FREQ_16MHZ);
 
@@ -209,40 +270,6 @@ static void i2c_init(void)
   */
 static void spi_init(void)
 {
-#if 0 // Check pins
-    gpio_mode_setup(SPI1_MOSI_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_MOSI_PIN);
-    gpio_mode_setup(SPI1_MISO_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_MISO_PIN);
-    gpio_mode_setup(SPI1_SCK_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_SCK_PIN);
-    gpio_mode_setup(SPI1_RFM_CS_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_RFM_CS_PIN);
-    gpio_mode_setup(RFM_IRQ_PORT, GPIO_MODE_INPUT, GPIO_PUPD_NONE, RFM_IRQ_PIN);
-    gpio_mode_setup(RFM_RESET_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, RFM_RESET_PIN);
-
-    gpio_clear(SPI1_MOSI_PORT, SPI1_MOSI_PIN);
-    gpio_clear(SPI1_MISO_PORT, SPI1_MISO_PIN);
-    gpio_clear(SPI1_SCK_PORT, SPI1_SCK_PIN);
-    gpio_clear(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN);
-    gpio_clear(RFM_RESET_PORT, RFM_RESET_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_set(SPI1_MOSI_PORT, SPI1_MOSI_PIN);
-    gpio_set(SPI1_MISO_PORT, SPI1_MISO_PIN);
-    gpio_set(SPI1_SCK_PORT, SPI1_SCK_PIN);
-    gpio_set(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN);
-    gpio_set(RFM_RESET_PORT, RFM_RESET_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_clear(SPI1_MOSI_PORT, SPI1_MOSI_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_clear(SPI1_MISO_PORT, SPI1_MISO_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_clear(SPI1_SCK_PORT, SPI1_SCK_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_clear(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-    gpio_clear(RFM_RESET_PORT, RFM_RESET_PIN);
-    for (uint32_t i = 0; i < 100000; i++) __asm__("nop");
-
-#else
     /** Setup SPI1 pins */
     gpio_mode_setup(SPI1_MOSI_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, SPI1_MOSI_PIN);
     gpio_set_af(SPI1_MOSI_PORT, SPI1_MOSI_AF, SPI1_MOSI_PIN);
@@ -251,6 +278,7 @@ static void spi_init(void)
     gpio_set_af(SPI1_MISO_PORT, SPI1_MISO_AF, SPI1_MISO_PIN);
 
     gpio_mode_setup(SPI1_SCK_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, SPI1_SCK_PIN);
+    gpio_clear(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN);
     gpio_set_af(SPI1_SCK_PORT, SPI1_SCK_AF, SPI1_SCK_PIN);
 
     gpio_mode_setup(SPI1_RFM_CS_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_RFM_CS_PIN);
@@ -259,12 +287,7 @@ static void spi_init(void)
     gpio_mode_setup(SPI1_FLASH_CS_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, SPI1_FLASH_CS_PIN);
     gpio_set(SPI1_FLASH_CS_PORT, SPI1_FLASH_CS_PIN);
 
-    spi_reset(SPI1);
-    spi_init_master(SPI1, SPI_CR1_BAUDRATE_FPCLK_DIV_32, SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE, SPI_CR1_CPHA_CLK_TRANSITION_1, SPI_CR1_DFF_8BIT, SPI_CR1_MSBFIRST);
-    spi_enable_software_slave_management(SPI1);
-    spi_set_nss_high(SPI1);
-    spi_enable(SPI1);
-#endif
+    spi_driver_init();
 }
 
 /**
@@ -278,7 +301,7 @@ static void usart_init(void)
     usart_set_baudrate(USART1, 115200);
     usart_set_databits(USART1, 8);
     usart_set_parity(USART1, USART_PARITY_NONE);
-    usart_set_stopbits(USART1, USART_CR2_STOP_1_0BIT);
+    usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
     usart_set_mode(USART1, USART_MODE_TX_RX); // USART_MODE_TX);
     usart_set_flow_control(USART1, USART_FLOWCONTROL_NONE);
     usart_enable(USART1);
@@ -295,10 +318,8 @@ void usart1_isr(void)
         if ((USART_ISR(USART1) & USART_ISR_ORE) == 0 &&
             (USART_ISR(USART1) & USART_ISR_FE) == 0 &&
             (USART_ISR(USART1) & USART_ISR_PE) == 0) {
-            if (rx_buf) {
-              if (!ringbuf_put(rx_buf, ch)) {
-                  //printf("ASSERT:usart1_isr:%d\n", __LINE__);
-              }
+            if (!ringbuf_put(rx_buf, ch)) {
+                //printf("ASSERT:usart1_isr:%d\n", __LINE__);
             }
         } else {
             //printf("ASSERT:usart1_isr:%d\n", __LINE__);
@@ -314,8 +335,6 @@ static void gpio_init(void)
 {
     gpio_mode_setup(LED_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_PIN);
     gpio_mode_setup(AUX_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, AUX_PIN);
-    gpio_mode_setup(RFM_RESET_PORT,  GPIO_MODE_INPUT, GPIO_PUPD_NONE, RFM_RESET_PIN);
-    gpio_mode_setup(RFM_IRQ_PORT,    GPIO_MODE_INPUT, GPIO_PUPD_NONE, RFM_IRQ_PIN);
     gpio_mode_setup(TEMP_ALERT_PORT, GPIO_MODE_INPUT, GPIO_PUPD_NONE, TEMP_ALERT_PIN);
 
     /** Setup GPIO pins for USART1 */
@@ -411,6 +430,14 @@ static void adc_init(void)
 }
 
 /**
+ * @brief      Enable LSE
+ */
+static void rcc_css_lse_enable(void)
+{
+    RCC_CSR |= RCC_CSR_CSSLSEON;
+}
+
+/**
   * @brief Initialize the low speed xtal
   * @retval None
   */
@@ -445,4 +472,3 @@ static void lse_init(void)
         dbg_printf("LSE failed to start! (drive strength %d)\n", (RCC_CSR >> RCC_CSR_LSEDRV_SHIFT) & RCC_CSR_LSEDRV_MASK);
     }
 }
-

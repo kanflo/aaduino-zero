@@ -36,29 +36,52 @@
 #include "spiflash.h"
 
 
+static void blinken_halt(uint32_t blink_count);
+
 #define RX_BUF_SIZE  (16)
 static ringbuf_t rx_buf;
 static uint8_t rx_buffer[2*RX_BUF_SIZE];
 
 #define MAX_LINE_LENGTH  (80)
 
-static void help_handler(uint32_t argc, char *argv[])
-{
-    (void) argc;
-    (void) argv;
-    dbg_printf("Help handler!\n");
-}
+static void help_handler(uint32_t argc, char *argv[]);
+static void halt_handler(uint32_t argc, char *argv[]);
 
 cli_command_t commands[] = {
     {
         .cmd = "help",
         .handler = help_handler,
         .min_arg = 0, .max_arg = 0,
-        .help = "help!",
+        .help = "Print help",
+        .usage = "no usage"
+    },
+    {
+        .cmd = "halt",
+        .handler = halt_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Halt the system",
         .usage = "no usage"
     }
     // TODO: More commands to be added
 };
+
+
+static void help_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    for (uint32_t i = 0; i < sizeof(commands) / sizeof(cli_command_t); i++) {
+        dbg_printf("%s    %s\n", commands[i].cmd, commands[i].help);        
+    }
+}
+
+static void halt_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    dbg_printf("Halted\n");
+    blinken_halt(2);
+}
 
 static void blinken_halt(uint32_t blink_count)
 {
@@ -99,8 +122,8 @@ int main(void)
         dbg_printf("Temperature is %d.%d°C\n", t/1000, (t%1000)/100);
     }
 
-//    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
-//    rfm69_reset();
+    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
+    rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
         dbg_printf("No RFM69CW found\n");
     } else {
@@ -124,7 +147,7 @@ int main(void)
                 dbg_printf("\n");
                 if (i > 0) {
                     line[i] = 0;
-                    cli_run(commands, 1, line);
+                    cli_run(commands, sizeof(commands) / sizeof(cli_command_t), line);
                     i = 0;
                     line[0] = 0;
                 }

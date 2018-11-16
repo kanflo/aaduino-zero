@@ -33,6 +33,7 @@
 #include "tick.h"
 #include "rfm69.h"
 #include "rfm69_register.h"
+#include "spi_driver.h"
 
 // available frequency bands
 #define RF69_315MHZ           31 // non trivial values to avoid misconfiguration
@@ -66,7 +67,7 @@ static inline void rfm69_chipSelect(void);
 static inline void rfm69_chipUnselect(void);
 static void rfm69_clearFIFO(void);
 static void rfm69_waitForModeReady(void);
-static void rfm69_waitForPacketSent(void);
+static bool rfm69_waitForPacketSent(void);
 static int rfm69_readRSSI(void);
 static bool rfm69_channelFree(void);
 static int rfm69_receive_internal(char* data, unsigned int dataLength);
@@ -197,9 +198,8 @@ static const uint8_t rfm69_base_config[][2] =
  */
 void rfm69_reset()
 {
-  if (!_resetPort) {
+  if (!_resetPort)
     return;
-  }
 
   _init = false;
 
@@ -250,26 +250,13 @@ bool rfm69_init(uint32_t csPort, uint32_t csPin, bool highPowerDevice)
   gpio_mode_setup(_csPin, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, _csPin);
   gpio_set(_csPin, _csPort);
 
-  // Check if there is an RFM we can talk to. Read register and compare to reset value
-  if (rfm69_readRegister(0x58) != 0x1b) {
-    dbg_printf("register 0x58 check failed!\n");
-    return false;
-  }
-
-  rfm69_writeRegister(0x25, 0x04); // Dio2Mapping = 01 (Data)
-  uint8_t val = rfm69_readRegister(0x25);
-  if (val != 0x04) {
-    rfm69_writeRegister(0x25, 0x01);
-    dbg_printf("register 0x25 check failed (is 0x%02x)!\n", val);
-    return false;
+  uint8_t tmp = rfm69_readRegister(0x10);
+  if (tmp != 0x24) {
+    dbg_printf("Error: revision register is not 0x24 but 0x%02x\n", tmp);
   }
 
   rfm69_writeRegister(0x25, 0x01); // DIO0 signals PayloadReady in RX, TxReady in TX
-
-  rfm69_writeRegister(0x03, 0x1a); // Reset value
-  if (rfm69_readRegister(0x03) != 0x1a) { // Reset value
-    return false;
-  }
+  tmp = rfm69_readRegister(0x25);
 
   // set base configuration
   rfm69_setCustomConfig(rfm69_base_config, sizeof(rfm69_base_config) / 2);
@@ -307,9 +294,8 @@ void rfm69_setNetwork(uint8_t networkID)
 void rfm69_setFrequency(unsigned int frequency)
 {
   // switch to standby if TX/RX was active
-  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode) {
+  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode)
     rfm69_setMode(RFM69_MODE_STANDBY);
-  }
 
   // calculate register value
   frequency /= RFM69_FSTEP;
@@ -329,9 +315,8 @@ void rfm69_setFrequency(unsigned int frequency)
 void rfm69_setFrequencyDeviation(unsigned int frequency)
 {
   // switch to standby if TX/RX was active
-  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode) {
+  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode)
     rfm69_setMode(RFM69_MODE_STANDBY);
-  }
 
   // calculate register value
   frequency /= RFM69_FSTEP;
@@ -350,9 +335,8 @@ void rfm69_setFrequencyDeviation(unsigned int frequency)
 void rfm69_setBitrate(unsigned int bitrate)
 {
   // switch to standby if TX/RX was active
-  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode) {
+  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode)
     rfm69_setMode(RFM69_MODE_STANDBY);
-  }
 
   // calculate register value
   bitrate = RFM69_XO / bitrate;
@@ -371,13 +355,19 @@ void rfm69_setBitrate(unsigned int bitrate)
 uint8_t rfm69_readRegister(uint8_t reg)
 {
   // sanity check
-  if (reg > 0x7f) {
+  if (reg > 0x7f)
     return 0;
-  }
+
+  // read value from register
   rfm69_chipSelect();
-  (void) spi_xfer(SPI1, reg);
-  uint8_t value = spi_xfer(SPI1, 0);
+
+  uint8_t tx[] = { reg };
+  uint8_t rx[1], value = 0;
+  if (spi_irq_transceive(tx, sizeof(tx), rx, sizeof(rx))) {
+    value = rx[0];
+  }
   rfm69_chipUnselect();
+
   return value;
 }
 
@@ -390,15 +380,15 @@ uint8_t rfm69_readRegister(uint8_t reg)
 void rfm69_writeRegister(uint8_t reg, uint8_t value)
 {
   // sanity check
-  if (reg > 0x7f) {
+  if (reg > 0x7f)
     return;
-  }
 
   // transfer value to register and set the write flag
   rfm69_chipSelect();
 
-  (void) spi_xfer(SPI1, reg | 0x80);
-  (void) spi_xfer(SPI1, value);
+  uint8_t tx[] = { reg | 0x80, value };
+  if (spi_irq_transceive(tx, sizeof(tx), 0, 0)) {
+  }
 
   rfm69_chipUnselect();
 }
@@ -425,35 +415,36 @@ void rfm69_chipSelect()
  */
 RFM69Mode rfm69_setMode(RFM69Mode mode)
 {
-  if ((mode == _mode) || (mode > RFM69_MODE_RX)) {
+  if ((mode == _mode) || (mode > RFM69_MODE_RX))
     return _mode;
-  }
 
   // set new mode
   rfm69_writeRegister(0x01, mode << 2);
 
   // set special registers if this is a high power device (RFM69HW)
-  if (true == _highPowerDevice) {
-    switch (mode) {
+  if (true == _highPowerDevice)
+  {
+    switch (mode)
+    {
     case RFM69_MODE_RX:
       // normal RX mode
-      if (true == _highPowerSettings) {
+      if (true == _highPowerSettings)
         rfm69_setHighPowerSettings(false);
-      }
       break;
 
     case RFM69_MODE_TX:
       // +20dBm operation on PA_BOOST
-      if (true == _highPowerSettings) {
+      if (true == _highPowerSettings)
         rfm69_setHighPowerSettings(true);
-      }
       break;
 
     default:
       break;
     }
   }
+
   _mode = mode;
+
   return _mode;
 }
 
@@ -480,37 +471,40 @@ void rfm69_chipUnselect()
 void rfm69_setPASettings(uint8_t forcePA)
 {
   // disable OCP for high power devices, enable otherwise
-  rfm69_writeRegister(0x13, 0x0a | (_highPowerDevice ? 0x00 : 0x10));
+  rfm69_writeRegister(0x13, 0x0A | (_highPowerDevice ? 0x00 : 0x10));
 
-  if (0 == forcePA) {
-    if (true == _highPowerDevice) {
+  if (0 == forcePA)
+  {
+    if (true == _highPowerDevice)
+    {
       // enable PA1 only
-      rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1f) | 0x40);
-    } else {
-      // enable PA0 only
-      rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1f) | 0x80);
+      rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1F) | 0x40);
     }
-  } else {
+    else
+    {
+      // enable PA0 only
+      rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1F) | 0x80);
+    }
+  }
+  else
+  {
     // PA settings forced
     uint8_t pa = 0;
 
-    if (forcePA & 0x01) {
+    if (forcePA & 0x01)
       pa |= 0x80;
-    }
 
-    if (forcePA & 0x02) {
+    if (forcePA & 0x02)
       pa |= 0x40;
-    }
 
-    if (forcePA & 0x04) {
+    if (forcePA & 0x04)
       pa |= 0x20;
-    }
 
     // check if high power settings are forced
     _highPowerSettings = (forcePA & 0x08) ? true : false;
     rfm69_setHighPowerSettings(_highPowerSettings);
 
-    rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1f) | pa);
+    rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0x1F) | pa);
   }
 }
 
@@ -521,10 +515,11 @@ void rfm69_setPASettings(uint8_t forcePA)
  */
 void rfm69_setPowerLevel(uint8_t power)
 {
-  if (power > 31) {
+  if (power > 31)
     power = 31;
-  }
-  rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0xe0) | power);
+
+  rfm69_writeRegister(0x11, (rfm69_readRegister(0x11) & 0xE0) | power);
+
   _powerLevel = power;
 }
 
@@ -538,12 +533,11 @@ void rfm69_setPowerLevel(uint8_t power)
 void rfm69_setHighPowerSettings(bool enable)
 {
   // enabling only works if this is a high power device
-  if (true == enable && false == _highPowerDevice) {
+  if (true == enable && false == _highPowerDevice)
     enable = false;
-  }
 
-  rfm69_writeRegister(0x5a, enable ? 0x5d : 0x55);
-  rfm69_writeRegister(0x5c, enable ? 0x7c : 0x70);
+  rfm69_writeRegister(0x5A, enable ? 0x5D : 0x55);
+  rfm69_writeRegister(0x5C, enable ? 0x7C : 0x70);
 }
 
 /**
@@ -554,7 +548,8 @@ void rfm69_setHighPowerSettings(bool enable)
  */
 void rfm69_setCustomConfig(const uint8_t config[][2], unsigned int length)
 {
-  for (unsigned int i = 0; i < length; i++) {
+  for (unsigned int i = 0; i < length; i++)
+  {
     rfm69_writeRegister(config[i][0], config[i][1]);
   }
 }
@@ -571,12 +566,13 @@ void rfm69_setCustomConfig(const uint8_t config[][2], unsigned int length)
  * @param data Pointer to buffer with data
  * @param dataLength Size of buffer
  *
- * @return Number of bytes that have been sent
+ * @return Number of bytes that have been sent, zero if packet could not be sent
  */
 int rfm69_send(uint8_t *data, uint8_t dataLength)
 {
   // switch to standby and wait for mode ready, if not in sleep mode
-  if (RFM69_MODE_SLEEP != _mode) {
+  if (RFM69_MODE_SLEEP != _mode)
+  {
     rfm69_setMode(RFM69_MODE_STANDBY);
     rfm69_waitForModeReady();
   }
@@ -585,78 +581,73 @@ int rfm69_send(uint8_t *data, uint8_t dataLength)
   rfm69_clearFIFO();
 
   // limit max payload
-  if (dataLength > RFM69_MAX_PAYLOAD) {
+  if (dataLength > RFM69_MAX_PAYLOAD)
     dataLength = RFM69_MAX_PAYLOAD;
-  }
 
   // payload must be available
-  if (0 == dataLength) {
+  if (0 == dataLength)
     return 0;
-  }
 
   /* Wait for a free channel, if CSMA/CA algorithm is enabled.
    * This takes around 1,4 ms to finish if channel is free */
-  if (true == _csmaEnabled) {
+  if (true == _csmaEnabled)
+  {
     // Restart RX
-    rfm69_writeRegister(0x3d, (rfm69_readRegister(0x3d) & 0xfb) | 0x20);
+    rfm69_writeRegister(0x3D, (rfm69_readRegister(0x3D) & 0xFB) | 0x20);
 
     // switch to RX mode
     rfm69_setMode(RFM69_MODE_RX);
 
-    // wait until RSSI sampling is done; otherwise, 0xff (-127 dBm) is read
+    // wait until RSSI sampling is done; otherwise, 0xFF (-127 dBm) is read
 
     // RSSI sampling phase takes ~960 µs after switch from standby to RX
-    uint32_t startTime = mstimer_get();
-    while (((rfm69_readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - startTime) < 10)) ;
+    uint32_t timeEntry = mstimer_get();
+    while (((rfm69_readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
 
-    while ((false == rfm69_channelFree()) && ((mstimer_get() - startTime) < TIMEOUT_CSMA_READY)) {
+    while ((false == rfm69_channelFree()) && ((mstimer_get() - timeEntry) < TIMEOUT_CSMA_READY))
+    {
       // wait for a random time before checking again
       delay_ms(rand() % 10);
 
       /* try to receive packets while waiting for a free channel
        * and put them into a temporary buffer */
       int bytesRead;
-      if ((bytesRead = rfm69_receive_internal(_rxBuffer, RFM69_MAX_PAYLOAD)) > 0) {
-        dbg_printf("RX data while CSMA\n");
+      if ((bytesRead = rfm69_receive_internal(_rxBuffer, RFM69_MAX_PAYLOAD)) > 0)
+      {
         _rxBufferLength = bytesRead;
 
         // module is in RX mode again
 
         // Restart RX and wait until RSSI sampling is done
-        rfm69_writeRegister(0x3d, (rfm69_readRegister(0x3d) & 0xfb) | 0x20);
-        startTime = mstimer_get();
-        while (((rfm69_readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - startTime) < 10)) ;
+        rfm69_writeRegister(0x3D, (rfm69_readRegister(0x3D) & 0xFB) | 0x20);
+        timeEntry = mstimer_get();
+        while (((rfm69_readRegister(0x23) & 0x02) == 0) && ((mstimer_get() - timeEntry) < 10));
       }
     }
 
     rfm69_setMode(RFM69_MODE_STANDBY);
-  
-    if (mstimer_get() - startTime > TIMEOUT_CSMA_READY) {
-      dbg_printf("CSMA failed\n");
-      return 0;
-    }
   }
 
+  uint8_t tx[dataLength + 2];
+  tx[0] = 0x00 | 0x80;
+  tx[1] = dataLength;
+  for (uint32_t i = 0; i < dataLength; i++) {
+    tx[i+2] = data[i];
+  }
   // transfer packet to FIFO
   rfm69_chipSelect();
-
-  // address FIFO
-  (void) spi_xfer(SPI1, 0x00 | 0x80);
-  // send length byte
-  (void) spi_xfer(SPI1, dataLength);
-
-  // send payload
-  for (unsigned int i = 0; i < dataLength; i++) {
-    (void) spi_xfer(SPI1, ((uint8_t*)data)[i]);
+  if (!spi_irq_transceive(tx, sizeof(tx), 0, 0)) {
+    dataLength = 0;
   }
-
   rfm69_chipUnselect();
 
   // start radio transmission
   rfm69_setMode(RFM69_MODE_TX);
 
   // wait for packet sent
-  rfm69_waitForPacketSent();
+  if (!rfm69_waitForPacketSent()) {
+    dataLength = 0;
+  }
 
   // go to standby
   rfm69_setMode(RFM69_MODE_STANDBY);
@@ -680,7 +671,7 @@ static void rfm69_waitForModeReady()
 {
   uint32_t timeEntry = mstimer_get();
 
-  while (((rfm69_readRegister(0x27) & 0x80) == 0) && ((mstimer_get() - timeEntry) < TIMEOUT_MODE_READY)) ;
+  while (((rfm69_readRegister(0x27) & 0x80) == 0) && ((mstimer_get() - timeEntry) < TIMEOUT_MODE_READY));
 }
 
 /**
@@ -703,7 +694,8 @@ void rfm69_sleep()
 int rfm69_receive(char* data, unsigned int dataLength)
 {
   // check if there is a packet in the internal buffer and copy it
-  if (_rxBufferLength > 0) {
+  if (_rxBufferLength > 0)
+  {
     // copy only until dataLength, even if packet in local buffer is actually larger
     memcpy(data, _rxBuffer, dataLength);
 
@@ -713,7 +705,9 @@ int rfm69_receive(char* data, unsigned int dataLength)
     _rxBufferLength = 0;
 
     return bytesRead;
-  } else {
+  }
+  else
+  {
     // regular receive
     return rfm69_receive_internal(data, dataLength);
   }
@@ -732,33 +726,32 @@ int rfm69_receive(char* data, unsigned int dataLength)
 static int rfm69_receive_internal(char* data, unsigned int dataLength)
 {
   // go to RX mode if not already in this mode
-  if (RFM69_MODE_RX != _mode) {
+  if (RFM69_MODE_RX != _mode)
+  {
     rfm69_setMode(RFM69_MODE_RX);
     rfm69_waitForModeReady();
   }
+
   // check for flag PayloadReady
-  if (rfm69_readRegister(0x28) & 0x04) {
+  if (rfm69_readRegister(0x28) & 0x04)
+  {
     // go to standby before reading data
     rfm69_setMode(RFM69_MODE_STANDBY);
 
     // get FIFO content
     unsigned int bytesRead = 0;
-    bool first = true;
 
     // read until FIFO is empty or buffer length exceeded
-    while ((rfm69_readRegister(0x28) & 0x40) && (bytesRead < dataLength)) {
+    while ((rfm69_readRegister(0x28) & 0x40) && (bytesRead < dataLength))
+    {
       // read next byte
-      if (first) {
-        (void) rfm69_readRegister(0x00); // @todo: First byte seems to be the frame length, check with RFM69 Ref Man.
-        first = false;
-      } else {
-        data[bytesRead] = rfm69_readRegister(0x00);
-        bytesRead++;
-      }
+      data[bytesRead] = rfm69_readRegister(0x00);
+      bytesRead++;
     }
 
     // automatically read RSSI if requested
-    if (true == _autoReadRSSI) {
+    if (true == _autoReadRSSI)
+    {
       rfm69_readRSSI();
     }
 
@@ -786,35 +779,35 @@ static int rfm69_receive_internal(char* data, unsigned int dataLength)
  * @param keyLength Number of bytes in buffer aesKey; must be 16 bytes
  * @return State of encryption module (false = disabled; true = enabled)
  */
-bool rfm69_setAESEncryption(const void* aesKey, unsigned int keyLength)
+bool rfm69_setAESEncryption(uint8_t* aesKey, unsigned int keyLength)
 {
   bool enable = false;
 
   // check if encryption shall be enabled or disabled
-  if ((0 != aesKey) && (16 == keyLength)) {
+  if ((0 != aesKey) && (16 == keyLength))
     enable = true;
-  }
 
   // switch to standby
   rfm69_setMode(RFM69_MODE_STANDBY);
 
-  if (true == enable) {
+  if (true == enable)
+  {
     // transfer AES key to AES key register
     rfm69_chipSelect();
 
-    // address first AES MSB register
-    (void) spi_xfer(SPI1, 0x3e | 0x80);
-
-    // transfer key (0x3e..0x4d)
-    for (unsigned int i = 0; i < keyLength; i++) {
-      (void) spi_xfer(SPI1, ((uint8_t*)aesKey)[i]);
+    uint8_t tx[keyLength + 1];
+    tx[0] = 0x3e | 0x80; /** AES MSB register */
+    for (uint32_t i = 0; i < keyLength; i++) {
+      tx[i+1] = aesKey[i];
     }
-
+    // transfer key (0x3E..0x4D)
+    if (spi_irq_transceive(tx, sizeof(tx), 0, 0)) {
+    }
     rfm69_chipUnselect();
   }
 
   // set/reset AesOn Bit in packet config
-  rfm69_writeRegister(0x3d, (rfm69_readRegister(0x3d) & 0xfe) | (enable ? 1 : 0));
+  rfm69_writeRegister(0x3D, (rfm69_readRegister(0x3D) & 0xFE) | (enable ? 1 : 0));
 
   return enable;
 }
@@ -822,10 +815,18 @@ bool rfm69_setAESEncryption(const void* aesKey, unsigned int keyLength)
 /**
  * Wait until packet has been sent over the air or timeout.
  */
-static void rfm69_waitForPacketSent()
+static bool rfm69_waitForPacketSent()
 {
-  uint32_t timeEntry = mstimer_get();
-  while (((rfm69_readRegister(0x28) & 0x08) == 0) && ((mstimer_get() - timeEntry) < TIMEOUT_PACKET_SENT)) ;
+  uint64_t timeEntry = mstimer_get();
+  bool success = false;
+  do {
+    if ((rfm69_readRegister(0x28) & 0x08) != 0) {
+      success = true;
+      break;
+    }
+    delay_ms(1);
+  } while(mstimer_get() - timeEntry < TIMEOUT_PACKET_SENT);
+  return success;
 }
 
 /**
@@ -839,16 +840,14 @@ static void rfm69_waitForPacketSent()
 void rfm69_continuousBit(bool bit)
 {
   // only allow this in continuous mode and if data pin was specified
-  if ((RFM69_DATA_MODE_PACKET == _dataMode) || !_dataPort) {
+  if ((RFM69_DATA_MODE_PACKET == _dataMode) || !_dataPort)
     return;
-  }
 
   // send low or high bit
-  if (false == bit) {
+  if (false == bit)
     gpio_clear(_dataPort, _dataPin);
-  } else {
+  else
     gpio_set(_dataPort, _dataPin);
-  }
 }
 
 /**
@@ -872,7 +871,8 @@ static int rfm69_readRSSI()
  */
 void rfm69_dumpRegisters(void)
 {
-  for (unsigned int i = 1; i <= 0x71; i++) {
+  for (unsigned int i = 1; i <= 0x71; i++)
+  {
     dbg_printf("[0x%x]: 0x%x\n", i, rfm69_readRegister(i));
   }
 }
@@ -888,16 +888,18 @@ void rfm69_dumpRegisters(void)
 void rfm69_setOOKMode(bool enable)
 {
   // switch to standby if TX/RX was active
-  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode) {
+  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode)
     rfm69_setMode(RFM69_MODE_STANDBY);
-  }
 
-  if (false == enable) {
+  if (false == enable)
+  {
     // FSK
-    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0xe7));
-  } else {
+    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0xE7));
+  }
+  else
+  {
     // OOK
-    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0xe7) | 0x08);
+    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0xE7) | 0x08);
   }
 
   _ookEnabled = enable;
@@ -916,23 +918,23 @@ void rfm69_setOOKMode(bool enable)
 void rfm69_setDataMode(RFM69DataMode dataMode)
 {
   // switch to standby if TX/RX was active
-  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode) {
+  if (RFM69_MODE_RX == _mode || RFM69_MODE_TX == _mode)
     rfm69_setMode(RFM69_MODE_STANDBY);
-  }
 
-  switch (dataMode) {
+  switch (dataMode)
+  {
   case RFM69_DATA_MODE_PACKET:
-    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1f));
+    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1F));
     break;
 
   case RFM69_DATA_MODE_CONTINUOUS_WITH_SYNC:
-    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1f) | 0x40);
+    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1F) | 0x40);
     rfm69_writeRegister(0x25, 0x04); // Dio2Mapping = 01 (Data)
     rfm69_continuousBit(false);
     break;
 
   case RFM69_DATA_MODE_CONTINUOUS_WITHOUT_SYNC:
-    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1f) | 0x60);
+    rfm69_writeRegister(0x02, (rfm69_readRegister(0x02) & 0x1F) | 0x60);
     rfm69_writeRegister(0x25, 0x04); // Dio2Mapping = 01 (Data)
     rfm69_continuousBit(false);
     break;
@@ -958,28 +960,29 @@ int rfm69_setPowerDBm(int8_t dBm)
 {
   /* Output power of module is from -18 dBm to +13 dBm
    * in "low" power devices, -2 dBm to +20 dBm in high power devices */
-  if (dBm < -18 || dBm > 20) {
+  if (dBm < -18 || dBm > 20)
     return -1;
-  }
 
-  if (false == _highPowerDevice && dBm > 13) {
+  if (false == _highPowerDevice && dBm > 13)
     return -1;
-  }
 
-  if (true == _highPowerDevice && dBm < -2) {
+  if (true == _highPowerDevice && dBm < -2)
     return -1;
-  }
 
   uint8_t powerLevel = 0;
 
-  if (false == _highPowerDevice) {
+  if (false == _highPowerDevice)
+  {
     // only PA0 can be used
     powerLevel = dBm + 18;
 
     // enable PA0 only
     rfm69_writeRegister(0x11, 0x80 | powerLevel);
-  } else {
-    if (dBm >= -2 && dBm <= 13) {
+  }
+  else
+  {
+    if (dBm >= -2 && dBm <= 13)
+    {
       // use PA1 on pin PA_BOOST
       powerLevel = dBm + 18;
 
@@ -989,7 +992,9 @@ int rfm69_setPowerDBm(int8_t dBm)
       // disable high power settings
       _highPowerSettings = false;
       rfm69_setHighPowerSettings(_highPowerSettings);
-    } else if (dBm > 13 && dBm <= 17) {
+    }
+    else if (dBm > 13 && dBm <= 17)
+    {
       // use PA1 and PA2 combined on pin PA_BOOST
       powerLevel = dBm + 14;
 
@@ -999,7 +1004,9 @@ int rfm69_setPowerDBm(int8_t dBm)
       // disable high power settings
       _highPowerSettings = false;
       rfm69_setHighPowerSettings(_highPowerSettings);
-    } else {
+    }
+    else
+    {
       // output power from 18 dBm to 20 dBm, use PA1+PA2 with high power settings
       powerLevel = dBm + 11;
 
@@ -1024,10 +1031,12 @@ int rfm69_setPowerDBm(int8_t dBm)
  */
 static bool rfm69_channelFree()
 {
-  /** @todo: simplify :) */
-  if (rfm69_readRSSI() < CSMA_RSSI_THRESHOLD) {
+  if (rfm69_readRSSI() < CSMA_RSSI_THRESHOLD)
+  {
     return true;
-  } else {
+  }
+  else
+  {
     return false;
   }
 }
