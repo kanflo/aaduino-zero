@@ -36,6 +36,8 @@
 #include "rfm69_link.h"
 #include "spiflash.h"
 
+//#define CONFIG_RX_DEBUG
+
 #define NODE_ID                    (1) // I am the gateway
 #define TEMPERATURE_PACKET_SIZE   (10) // Temperature packet size
 #define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
@@ -61,7 +63,7 @@ static void blinken_halt(uint32_t blink_count)
 static void handle_temperature_frame(uint8_t src, uint8_t *payload, uint8_t len, int rssi)
 {
     if (len != 6) {
-        dbg_printf("Illegal temperature payload %d\n", len);
+        dbg_printf("Illegal temperature payload length %d\n", len);
     } else {
         //  <temperature:32> <vcc:16>
         int32_t t = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | (payload[3]);
@@ -70,9 +72,13 @@ static void handle_temperature_frame(uint8_t src, uint8_t *payload, uint8_t len,
             frac = -frac;
         }
         uint16_t vcc = (payload[4] << 8) | (payload[5]);
-        dbg_printf("From %02x  Temperature is %d.%d°C, vcc is %d.%02dV. RSSI:%d\n", src, t/1000, frac, vcc/1000, (vcc%1000)/10, rssi);
+        dbg_printf("From node %d: ", src);
+        dbg_printf("temperature:%d.%d°C, ", t/1000, frac);
+        dbg_printf("vcc:%d.%02dV, ", vcc/1000, (vcc%1000)/10);
+        dbg_printf("rssi:%d\n", rssi);
     }
 }
+
 
 /**
   * @brief Dump packet
@@ -81,7 +87,7 @@ static void handle_temperature_frame(uint8_t src, uint8_t *payload, uint8_t len,
   */
 static void dump_frame(rfm69_link_frame_t *frame, uint8_t len)
 {
-    dbg_printf("%02x -> %02x cnt:%02d flags:%02x : [ ", frame->_src, frame->_dst, frame->_flags >> 4, frame->_flags % 0xf);
+    dbg_printf("%02x -> %02x cnt:%2d flags:%x : [ ", frame->_src, frame->_dst, frame->_cntr_flags >> 4, frame->_cntr_flags & 0xf);
     for (uint8_t i = 0; i < len; i++) {
         dbg_printf("%02x ", frame->payload[i]);
     }
@@ -108,7 +114,6 @@ int main(void)
         blinken_halt(1);
     } else {
         dbg_printf("RFM69CW found\n");
-
         rfm69_sleep(); // init RF module and put it to sleep
         rfm69_setPowerDBm(13); // // set output power, +13 dBm
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
@@ -117,18 +122,19 @@ int main(void)
         rfm69link_setNodeId(NODE_ID);
     }
 
-    dbg_printf("Receiving temperature and voltage.\n");
-
     while(1) {
         rfm69_link_frame_t frame;
         uint8_t src, length;
         if (rfm69link_receiveFrame(&src, &frame, &length)) {
             hw_set_led(true);
+#ifdef CONFIG_RX_DEBUG
             dump_frame(&frame, length);
+#endif // CONFIG_RX_DEBUG
             if (length > 0) {
                 switch(frame.payload[0]) {
                     case TEMPERATURE_FRAME_TYPE:
-                        handle_temperature_frame(src, &frame.payload[1], length - 1, frame.rssi);
+                        /** Chop off frame type */
+                        handle_temperature_frame(src, &frame.payload[1], length-1, frame.rssi);
                         break;
                     default:
                         dbg_printf("Unknown packet type 0x%02x\n", frame.payload[0]);

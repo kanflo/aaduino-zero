@@ -94,14 +94,14 @@ int main(void)
         int32_t t = 1000 * tmp102_readTempC();
 
         rfm69_link_frame_t frame;
-        uint8_t i = 0;
-        frame.payload[i++] = TEMPERATURE_FRAME_TYPE;
-        frame.payload[i++] = (t >> 24) & 0xff;
-        frame.payload[i++] = (t >> 16) & 0xff;
-        frame.payload[i++] = (t >>  8) & 0xff;
-        frame.payload[i++] = (t      ) & 0xff;
-        frame.payload[i++] = (vcc >> 8) & 0xff;
-        frame.payload[i++] = (vcc    ) & 0xff;
+        uint8_t len = 0;
+        frame.payload[len++] = TEMPERATURE_FRAME_TYPE;
+        frame.payload[len++] = (t >> 24) & 0xff;
+        frame.payload[len++] = (t >> 16) & 0xff;
+        frame.payload[len++] = (t >>  8) & 0xff;
+        frame.payload[len++] = (t      ) & 0xff;
+        frame.payload[len++] = (vcc >> 8) & 0xff;
+        frame.payload[len++] = (vcc    ) & 0xff;
 
         int32_t frac = (t%1000)/100;
         if (frac < 0) {
@@ -109,8 +109,8 @@ int main(void)
         }
         dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
         hw_set_led(true);
-        if (rfm69link_sendFrame(GATEWAY_ID, &frame, i)) {
-            dbg_printf(" Packet sent, ack RSSI %d\n", frame.rssi);
+        if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+            dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");
         }

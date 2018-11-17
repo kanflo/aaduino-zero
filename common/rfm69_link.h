@@ -36,7 +36,7 @@ typedef enum {
 typedef struct {
     uint8_t _dst;
     uint8_t _src;
-    uint8_t _flags; // [7:4 counter] [3:0 flags]
+    uint8_t _cntr_flags; // [7:4 counter] [3:0 flags]
     uint8_t payload[RFM69_LINK_MAX_FRAME];
     int     rssi; // Valid on RX
 } __attribute__((packed)) rfm69_link_frame_t;

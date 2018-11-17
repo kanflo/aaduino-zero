@@ -28,7 +28,11 @@
 #include "rfm69_link.h"
 
 
-#define LINK_OVERHEAD       (3) // <dst> <src> <flags>
+/** Dump incoming packets */
+//#define CONFIG_LINK_RX_DEBUG
+
+
+#define LINK_OVERHEAD       (3) // <dst> <src> <counter & flags>
 
 #define LINK_TX_RETRY_COUNT       (5) // Number of TX attempts
 #define LINK_TX_RETRY_SLEEP_MS  (500) // Sleep time between TX attempts
@@ -67,7 +71,7 @@ uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t leng
     }
     frame->_dst = dst;
     frame->_src = _node_id;
-    frame->_flags = (((_counter) & 0xf) << 4) | rfm69_req_ack;
+    frame->_cntr_flags = (((_counter) & 0xf) << 4) | rfm69_req_ack;
     do {
         //dbg_printf("TX attempt #%d\n", attempt);
         tx_len = rfm69_send((uint8_t*) frame, LINK_OVERHEAD + length);
@@ -95,7 +99,6 @@ uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t leng
     return tx_len;
 }
 
-//#define RX_DEBUG
 
 /**
  * @brief      Receive a frame
@@ -116,31 +119,33 @@ bool rfm69link_receiveFrame(uint8_t *src, rfm69_link_frame_t *frame, uint8_t *le
     bool success = false;
     uint8_t len = rfm69_receive((char*) frame, LINK_OVERHEAD + RFM69_LINK_MAX_FRAME);
     if (len >= LINK_OVERHEAD) {
-#ifdef RX_DEBUG
+
         frame->rssi = rfm69_getRSSI();
         rfm69_sleep();
-        dbg_printf("Got frame 0x%02x -> 0x%02x (%d)\n", frame->_src, frame->_dst, len);
-        for (int i = 0; i < len-3; i++) {
-            dbg_printf("%02x ", frame->payload[i]);
+#ifdef CONFIG_LINK_RX_DEBUG
+        uint8_t *p = (uint8_t*) frame;
+        dbg_printf("Link: %d byte frame (%02d -> %02d) [ ", len, frame->_src, frame->_dst);
+        for (int i = 0; i < len; i++) {
+            dbg_printf("%02x ", p[i]);
         }
-        dbg_printf("\n");
-#endif // RX_DEBUG
+        dbg_printf("] rssi:%d\n", frame->rssi);
+#endif // CONFIG_LINK_RX_DEBUG
         if (frame->_dst == _node_id) {
             *length = len - LINK_OVERHEAD;
             *src = frame->_src;
             success = true;
-            if (frame->_flags & rfm69_req_ack) { // Debug, always send ack
-                rfm69_link_frame_t ack; // @todo: optimize stack usage
+            if (frame->_cntr_flags & rfm69_req_ack) {
+                rfm69_link_frame_t ack; /** @todo: optimize stack usage */
                 ack._src = frame->_dst;
                 ack._dst = frame->_src;
-                ack._flags = (frame->_flags & 0xf0) | rfm69_ack; // sender's counter + ack bit
-    #ifdef RX_DEBUG
+                ack._cntr_flags = (frame->_cntr_flags & 0xf0) | rfm69_ack; // sender's counter + ack bit
+#ifdef CONFIG_LINK_RX_DEBUG
                 dbg_printf("Sending ack\n");
-    #endif // RX_DEBUG
+#endif // CONFIG_LINK_RX_DEBUG
                 len = rfm69_send((uint8_t*) &ack, LINK_OVERHEAD);
-    #ifdef RX_DEBUG
+#ifdef CONFIG_LINK_RX_DEBUG
                 dbg_printf("TX ack:%d\n", len);
-    #endif // RX_DEBUG
+#endif // CONFIG_LINK_RX_DEBUG
             }
         }
     }
