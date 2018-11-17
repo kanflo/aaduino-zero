@@ -202,11 +202,7 @@ static void clock_init(void)
   */
 static void i2c_init(void)
 {
-#if 0
-    sw_i2c_init();
-#else
     i2c_reset(I2C1);
-
 
     /* Setup GPIO pins for I2C1 */
     gpio_mode_setup(I2C1_SCL_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, I2C1_SCL_PIN);
@@ -261,7 +257,6 @@ static void i2c_init(void)
 
 
     i2c_peripheral_enable(I2C1);
-#endif
 }
 
 /**

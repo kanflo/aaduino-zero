@@ -6,7 +6,6 @@ CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE
 
 OBJS = \
 	$(COMMON)/cli.o \
-	$(COMMON)/sw_i2c.o \
 	$(COMMON)/spi_driver.o \
 	$(COMMON)/tmp102.o \
 	$(COMMON)/rfm69.o \
