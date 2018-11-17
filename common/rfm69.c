@@ -70,7 +70,7 @@ static void rfm69_waitForModeReady(void);
 static bool rfm69_waitForPacketSent(void);
 static int rfm69_readRSSI(void);
 static bool rfm69_channelFree(void);
-static int rfm69_receive_internal(char* data, unsigned int dataLength);
+static int rfm69_receive_internal(char* data, uint8_t dataLength);
 
 
 /** RFM69 base configuration after init().
@@ -703,7 +703,6 @@ int rfm69_receive(char* data, unsigned int dataLength)
 
     // empty local buffer
     _rxBufferLength = 0;
-
     return bytesRead;
   }
   else
@@ -723,8 +722,9 @@ int rfm69_receive(char* data, unsigned int dataLength)
  * @param dataLength Maximum size of buffer
  * @return Number of received bytes; 0 if no payload is available.
  */
-static int rfm69_receive_internal(char* data, unsigned int dataLength)
+static int rfm69_receive_internal(char* data, uint8_t dataLength)
 {
+  uint8_t i = 0, frameLength = 0;
   // go to RX mode if not already in this mode
   if (RFM69_MODE_RX != _mode)
   {
@@ -739,13 +739,17 @@ static int rfm69_receive_internal(char* data, unsigned int dataLength)
     rfm69_setMode(RFM69_MODE_STANDBY);
 
     // get FIFO content
-    unsigned int bytesRead = 0;
+    uint8_t bytesRead = 0;
 
     // read until FIFO is empty or buffer length exceeded
     while ((rfm69_readRegister(0x28) & 0x40) && (bytesRead < dataLength))
     {
-      // read next byte
-      data[bytesRead] = rfm69_readRegister(0x00);
+      if (bytesRead == 0) {
+        /** First byte from the FIFO is the length, don't return it as 'payload' */
+        frameLength = rfm69_readRegister(0x00);
+      } else {
+        data[i++] = rfm69_readRegister(0x00);
+      }
       bytesRead++;
     }
 
@@ -760,7 +764,10 @@ static int rfm69_receive_internal(char* data, unsigned int dataLength)
     // todo: wait needed?
     //		rfm69_waitForModeReady();
 
-    return bytesRead;
+    if (bytesRead != frameLength + 1) {
+      dbg_printf("RX FIFO mismatch, got %d bytes and not %d\n", frameLength + 1, bytesRead);
+    }
+    return frameLength; //  bytesRead;
   }
   else
     return 0;
