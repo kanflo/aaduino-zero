@@ -5,8 +5,8 @@ COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON)
 
 OBJS = \
-    $(COMMON)/sw_i2c.o \
     $(COMMON)/tmp102.o \
+    $(COMMON)/sw_i2c.o \
     $(COMMON)/rfm69.o \
     $(COMMON)/spi_driver.o \
     $(COMMON)/spiflash.o \

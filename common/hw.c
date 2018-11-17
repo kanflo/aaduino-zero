@@ -202,6 +202,10 @@ static void clock_init(void)
   */
 static void i2c_init(void)
 {
+#if 1
+    sw_i2c_init();
+#else
+    /** @todo: use HW i2c */
     i2c_reset(I2C1);
 
     /* Setup GPIO pins for I2C1 */
@@ -257,6 +261,7 @@ static void i2c_init(void)
 
 
     i2c_peripheral_enable(I2C1);
+#endif
 }
 
 /**
