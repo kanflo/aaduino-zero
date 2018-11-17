@@ -17,7 +17,7 @@ The [receiver](https://github.com/kanflo/aaduino-zero/tree/master/examples/recei
 From node 42: temperature:23.8°C, vcc:3.40V, rssi:-27
 ```
 
-It also sends an ackmowledge to the transmitter to let it know the report war received. This is the ```ASCK RSSI``` print in the transmitter example.
+It also sends an ackmowledge to the transmitter to let it know the report was received. This is the ```ASCK RSSI``` print in the transmitter example.
 
 
 ### AAduino Zero specs
