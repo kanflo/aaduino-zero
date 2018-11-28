@@ -3,7 +3,7 @@ BINARY = main
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON)
-LDSCRIPT = $(COMMON)/stm32fl052_app.ld
+LDSCRIPT = $(COMMON)/stm32l052_app.ld
 
 OBJS = \
 	$(COMMON)/cli.o \
