@@ -174,6 +174,8 @@ bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
 bool spiflash_erase(uint32_t address, uint32_t length)
 {
     bool success = false;
+    (void) address;
+    (void) length;
 #if 0
     if (flash_idx >= 0) {
         uint32_t address_aligned = address & ~(SUBSECTOR_SIZE-1);

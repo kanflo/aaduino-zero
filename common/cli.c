@@ -29,6 +29,7 @@
 #include <string.h>
 #include <usart.h>
 #include "cli.h"
+#include "dbg_printf.h"
 
 #ifdef CONFIG_CMD_EXTRA_PADDING
  #define CMD_EXTRA_PADDING CONFIG_CMD_EXTRA_PADDING
@@ -58,7 +59,8 @@
   * @brief Handle command input from the user
   * @param cmds array of supported commands
   * @param num number of commands in the cmds array
-  * @param line user input to parsr
+  * @param line user input to parser
+  * @todo  multiple separators should be treated as one
   * @retval None
   */
 void cli_run(const cli_command_t cmds[], const uint32_t num, char *line)
@@ -68,24 +70,25 @@ void cli_run(const cli_command_t cmds[], const uint32_t num, char *line)
     // into argc, argv style
     char *argv[MAX_ARGC];
     uint32_t argc = 1;
-    char *temp, *rover;
+    char *rover;
     memset((void*) argv, 0, sizeof(argv));
     argv[0] = line;
-    rover = line;
     rover = strstr(line, ARG_DELIMITER_STR);
-    while(argc < MAX_ARGC && (temp = strstr(rover, ARG_DELIMITER_STR))) {
-        temp++;
-        argv[argc++] = temp;
-        *rover = 0;
-        rover = temp+1;
+    if (rover) {
+        do {
+            *rover = 0;
+            rover++;
+            argv[argc++] = rover;
+            rover = strstr(rover, ARG_DELIMITER_STR);
+        } while(argc < MAX_ARGC && (rover = strstr(rover, ARG_DELIMITER_STR)));
     }
 
     for (uint32_t i=0; i<num; i++) {
         if (cmds[i].cmd && strcmp(argv[0], cmds[i].cmd) == 0) {
             if (cmds[i].min_arg > argc-1 || cmds[i].max_arg < argc-1) {
-                dbg_printf("Wrong number of arguments:\n");
+                dbg_printf("Wrong number of arguments %d\n", argc);
                 if (cmds[i].usage) {
-                    dbg_printf("Usage: %s%s%s;\n", cmds[i].cmd, ARG_DELIMITER_STR, cmds[i].usage);
+                    dbg_printf("Usage: %s%s%s\n", cmds[i].cmd, ARG_DELIMITER_STR, cmds[i].usage);
                 }
             } else {
                 cmds[i].handler(argc, argv);

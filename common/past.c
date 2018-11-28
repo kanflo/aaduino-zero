@@ -1,7 +1,7 @@
 /*
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Johan Kanflo (github.com/kanflo)
+ * Copyright (c) 2018 Johan Kanflo (github.com/kanflo)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,12 +29,25 @@
 #include <past.h>
 #include <flash.h>
 
+#ifdef CONFIG_PAST_DEBUG
+ #include "dbg_printf.h"
+#endif // CONFIG_PAST_DEBUG
+
 /*
- * Past - parameter storage
- * The Past module enables parameter storage in the internal flash of the STM32
+ * Past - parameter storage (EEPROM style)
+ * The Past module enables parameter storage in the internal eeprom of the STM32
  * Parameters are identified by an 32 bit integer id (0 and 0xffffffff are
  * invalid ids) and the maximum size of a parameter is 4Gb (which we obviously
  * cannot store :)
+ *
+ * This module originally appeared in tne OpenDPS project and is basically the
+ * same with the difference that this version stores data in the STM32L0 EEPROM
+ * rather than in flash. The STM32L0 EEPROM is different in that erased space
+ * is 0x00 and not 0xff as the interal flash of the STM32F0. Actually, erased
+ * internal flash on the STM32L0 is alseo 0x00.
+ *
+ * According to this scheme, we can find the end of the past by finding the unit
+ * with id 0 and length 0.
  *
  * A unit can be written, rewritten or removed at randon and the module has
  * transaction support meaning that a unit will be written in its completeness
@@ -49,17 +62,17 @@
  *    .
  *    .
  *    .
- * [ 0xffffffff ] [ 0xffffffff ]
- *
+ * [ 0x00000000 ] [ 0x00000000 ]
+ * 
  * Each of the two Past blocks begin with the Past magic, followed by a past
  * counter which is increased by one for each garbage collection. The counter is
  * never expected to wrap as the number of erase cycles is far less than a 32
- * bit ingeter...
+ * bit integer...
  *
- * Each unit begins at an even 32 bit boundary. The unit id 0xffffffff denotes
+ * Each unit begins at an even 32 bit boundary. The unit id 0x00000000 denotes
  * end of past and cannot be used. The usage of 32 bit integers may seem
  * wasteful but has been selected as size this is the minimum writable unit
- * (MWU) on the STM32F100, for which this module is targeted. It adapting this
+ * (MWU) on the STM32L0, for which this module is targeted. It adapting this
  * module for eg. STM32F4s, that need to change because of the MWU of 8 bytes.
  *
  * Past uses two blocks. When one block is full (it gets filled as parameters
@@ -91,7 +104,7 @@
  * First, the module selects the current data block based on the Past counters
  * at offset 4 (assuming the Past magics are in place). Next the data is checked
  * for consistency. It should be possible to reach the end marker unit
- * (0xffffffff) while parsing the data. If so, the resto of the block is checked
+ * (0x00000000) while parsing the data. If so, the resto of the block is checked
  * for erased data. If none erased data is found following the end marker, we
  * have found traces of a non completed write and a garbage collection is
  * performed.
@@ -104,17 +117,14 @@
  * update the block counter att offset 4 and at the very last write the past
  * magic at offset 0.
  *
- *
- *
- *
  */
 
 #define PAST_MAGIC 0x50617374 // "past"
 
-#define PAST_UNIT_ID_INVALID           (0)
-#define PAST_UNIT_ID_END      (0xffffffff)
-
-#define PAST_BLOCK_SIZE     (1024)  //STM32F100
+/** When a unit is rewritten, the old versions id is changed to INVALUD */
+#define PAST_UNIT_ID_INVALID           (0xffffffff)
+/** This is the same as erased space and is used to find the end if the past */
+#define PAST_UNIT_ID_END               (0x00000000)
 
 #define HEADER_COUNTER_OFFSET     (4)
 #define HEADER_FIRST_UNIT_OFFSET  (8)
@@ -125,14 +135,11 @@
 static uint32_t past_find_unit(past_t *past, past_id_t id);
 static bool past_erase_unit_at(uint32_t address);
 static bool past_garbage_collect(past_t *past);
-static bool flash_write32(uint32_t address, uint32_t data);
-static uint32_t flash_read32(uint32_t address); /** @todo Make a macro out of read32*/
-static void unlock_flash(void);
-static void lock_flash(void);
+static bool eeprom_zero(uint32_t address, uint32_t length);
+static bool eeprom_write32(uint32_t address, uint32_t data);
 static bool copy_parameters(past_t *past, uint32_t src_base, uint32_t dst_base);
 static uint32_t past_remaining_size(past_t *past);
-
-static uint32_t flash_unlock_count;
+#define eeprom_read32(address) *(uint32_t*) (address)
 
 /**
   * @brief Initialize the past, format or garbage collect if needed
@@ -145,10 +152,10 @@ bool past_init(past_t *past)
     bool success = false;
     if (past) {
         /** Check which block is the current one */
-        uint32_t magic_1 = flash_read32(past->blocks[0]);
-        uint32_t magic_2 = flash_read32(past->blocks[1]);
-        uint32_t counter_1 = flash_read32(past->blocks[0] + HEADER_COUNTER_OFFSET);
-        uint32_t counter_2 = flash_read32(past->blocks[1] + HEADER_COUNTER_OFFSET);
+        uint32_t magic_1 = eeprom_read32(past->blocks[0]);
+        uint32_t magic_2 = eeprom_read32(past->blocks[1]);
+        uint32_t counter_1 = eeprom_read32(past->blocks[0] + HEADER_COUNTER_OFFSET);
+        uint32_t counter_2 = eeprom_read32(past->blocks[1] + HEADER_COUNTER_OFFSET);
         success = true;
         if (PAST_MAGIC == magic_1 && PAST_MAGIC == magic_2) {
             past->_cur_block = counter_2 > counter_1 ? 1 : 0;
@@ -173,8 +180,8 @@ bool past_init(past_t *past)
         /** Now check all space following the end address is erased space, if not
           * we have a half completed write operation we need to clear */
         uint32_t check_addr = past->_end_addr;
-        while (check_addr < past->blocks[ past->_cur_block ] + PAST_BLOCK_SIZE) {
-            if (flash_read32(check_addr) != PAST_UNIT_ID_END) {
+        while (check_addr < past->blocks[ past->_cur_block ] + past->_block_size) {
+            if (eeprom_read32(check_addr) != PAST_UNIT_ID_END) {
                 success &= past_garbage_collect(past);
                 break;
             }
@@ -201,7 +208,7 @@ bool past_read_unit(past_t *past, past_id_t id, const void **data, uint32_t *len
     }
     uint32_t address = past_find_unit(past, id);
     if (address) {
-        *length = flash_read32(address + UNIT_SIZE_OFFSET);
+        *length = eeprom_read32(address + UNIT_SIZE_OFFSET);
         *data = (const void*) address + UNIT_DATA_OFFSET;
     }
     return address ? true : false;
@@ -225,7 +232,7 @@ bool past_write_unit(past_t *past, past_id_t id, void *data, uint32_t length)
     uint32_t wi = 0; /** word index */
     uint32_t temp;
     bool success = false;
-    unlock_flash();
+    uint8_t *p = (uint8_t*) data;
 
     if (past_remaining_size(past) < UNIT_DATA_OFFSET + length) {
         if (!past_garbage_collect(past)) {
@@ -240,19 +247,23 @@ bool past_write_unit(past_t *past, past_id_t id, void *data, uint32_t length)
         /** Check if there is an old version of the unit */
         uint32_t old_addr = past_find_unit(past, id);
         /** Write the new unit */
-        if (!flash_write32(end_address+UNIT_SIZE_OFFSET, length)) {
+        if (!eeprom_write32(end_address+UNIT_SIZE_OFFSET, length)) {
             break;
         }
-        while(4*wi < length) {
-            temp = ((uint32_t*)(data))[wi];
-            if (!flash_write32(end_address+UNIT_DATA_OFFSET+4*wi, temp)) {
-                break;
-            }
-            wi++;
-            if (length % 4 && 4*(wi+1) >= length) {
-                /** Data not even multiple of 4, reading one more word would
-                  * cause an out of bound buffer read */
-                break;
+        if (length >= 4) {
+            while(4*wi < length) {
+                /** data is not guaranteed to be word aligned */
+                temp = p[3] << 24 | p[2] << 16 | p[1] << 8 | p[0];
+                p += 4;
+                if (!eeprom_write32(end_address+UNIT_DATA_OFFSET+4*wi, temp)) {
+                    break;
+                }
+                wi++;
+                if (length % 4 && 4*(wi+1) >= length) {
+                    /** Data not even multiple of 4, reading one more word would
+                      * cause an out of bound buffer read */
+                    break;
+                }
             }
         }
         if (length % 4) { /** Write remaining 1..3 bytes */
@@ -261,11 +272,11 @@ bool past_write_unit(past_t *past, past_id_t id, void *data, uint32_t length)
                 uint8_t b = ((uint8_t*)(data))[4*wi + i];
                 temp |= b << (8*i);
             }
-            if (!flash_write32(end_address+UNIT_DATA_OFFSET+4*wi, temp)) {
+            if (!eeprom_write32(end_address+UNIT_DATA_OFFSET+4*wi, temp)) {
                 break;
             }
         }
-        if (!flash_write32(end_address, id)) {
+        if (!eeprom_write32(end_address, id)) {
             break;
         }
         /** Update end addres of the past struct */
@@ -283,7 +294,6 @@ bool past_write_unit(past_t *past, past_id_t id, void *data, uint32_t length)
         }
         success = true;
     } while(0);
-    lock_flash();
     return success;
 }
 
@@ -325,30 +335,22 @@ bool past_format(past_t *past)
     if (!past) {
         return success;
     }
-    unlock_flash();
     do {
         uint32_t cur_base;
-        flash_erase_page(past->blocks[0]);
-        if (!(FLASH_SR_EOP & flash_get_status_flags())) {
-            break;
-        }
-        flash_erase_page(past->blocks[1]);
-        if (!(FLASH_SR_EOP & flash_get_status_flags())) {
-            break;
-        }
+        eeprom_zero(past->blocks[0], past->_block_size);
+        eeprom_zero(past->blocks[1], past->_block_size);
         past->_cur_block = 0;
         past->_counter = 0;
         past->_end_addr = past->blocks[0] + HEADER_FIRST_UNIT_OFFSET;
         cur_base = past->blocks[past->_cur_block];
-        if (!flash_write32(cur_base + HEADER_COUNTER_OFFSET, past->_counter)) {
+        if (!eeprom_write32(cur_base + HEADER_COUNTER_OFFSET, past->_counter)) {
             break;
         }
-        if (!flash_write32(cur_base, PAST_MAGIC)) {
+        if (!eeprom_write32(cur_base, PAST_MAGIC)) {
             break;
         }
         success = true;
     } while(0);
-    lock_flash();
     return success;
 }
 
@@ -363,7 +365,7 @@ static uint32_t past_remaining_size(past_t *past)
     if (!past) {
         return 0;
     } else {
-        return PAST_BLOCK_SIZE - (past->_end_addr - past->blocks[past->_cur_block]);
+        return past->_block_size - (past->_end_addr - past->blocks[past->_cur_block]);
     }
 }
 
@@ -376,17 +378,15 @@ static uint32_t past_remaining_size(past_t *past)
 static bool past_erase_unit_at(uint32_t address)
 {
     bool success = true;
-    uint32_t length = flash_read32(address + UNIT_SIZE_OFFSET);
-    unlock_flash();
+    uint32_t length = eeprom_read32(address + UNIT_SIZE_OFFSET);
     do {
         /** Wipe data, always an even multiple of 4 bytes */
         for (uint32_t i = 0; i < length/4 && success; i++) {
-            success &= flash_write32(address + UNIT_DATA_OFFSET + 4*i, 0);
+            success &= eeprom_write32(address + UNIT_DATA_OFFSET + 4*i, 0);
         }
         /** Wipe unit id */
-        success &= flash_write32(address, 0);
+        success &= eeprom_write32(address, PAST_UNIT_ID_INVALID);
     } while(0);
-    lock_flash();
     return success;
 }
 
@@ -402,14 +402,21 @@ static uint32_t past_find_unit(past_t *past, past_id_t id)
     uint32_t cur_address = base + HEADER_FIRST_UNIT_OFFSET;
     uint32_t cur_id, cur_size;
     do {
-        cur_id = flash_read32(cur_address);
+        cur_id = eeprom_read32(cur_address);
+#ifdef CONFIG_PAST_DEBUG
+        dbg_printf("Found %d ", cur_id);
+        dbg_printf("at 0x%08x\n", cur_address);
+#endif // CONFIG_PAST_DEBUG
         if (id == cur_id) {
             break;
         } else if (cur_id == PAST_UNIT_ID_END) {
             cur_address = 0; /** Reached end */
             break;
         } else { /** Move on */
-            cur_size = flash_read32(cur_address + UNIT_SIZE_OFFSET);
+            cur_size = eeprom_read32(cur_address + UNIT_SIZE_OFFSET);
+#ifdef CONFIG_PAST_DEBUG
+            dbg_printf(" Size %d\n", cur_size);
+#endif // CONFIG_PAST_DEBUG
             if (cur_size == 0) {
                 cur_address = 0; /** Fatal error */
                 break;
@@ -420,7 +427,7 @@ static uint32_t past_find_unit(past_t *past, past_id_t id)
             cur_address += UNIT_DATA_OFFSET + cur_size;
         }
 
-    } while (cur_address < base + PAST_BLOCK_SIZE);
+    } while (cur_address < base + past->_block_size);
     return cur_address;
 }
 
@@ -432,37 +439,47 @@ static uint32_t past_find_unit(past_t *past, past_id_t id)
 static bool past_garbage_collect(past_t *past)
 {
     bool success = false;
-    unlock_flash();
     do {
         /** Format the new block */
         uint32_t new_block = past->blocks[past->_cur_block ? 0 : 1];
         uint32_t old_block = past->blocks[past->_cur_block];
-        flash_erase_page(new_block);
-        if (!(FLASH_SR_EOP & flash_get_status_flags())) {
-            break;
-        }
+        eeprom_zero(new_block, past->_block_size);
         if (!copy_parameters(past, old_block, new_block)) {
             break;
         }
-
-        if (!flash_write32(new_block + HEADER_COUNTER_OFFSET, past->_counter+1)) {
+        if (!eeprom_write32(new_block + HEADER_COUNTER_OFFSET, past->_counter+1)) {
             break;
         }
-        if (!flash_write32(new_block, PAST_MAGIC)) {
+        if (!eeprom_write32(new_block, PAST_MAGIC)) {
             break;
         }
-
-        flash_erase_page(old_block);
-        if (!(FLASH_SR_EOP & flash_get_status_flags())) {
-            break;
-        }
-
+        eeprom_zero(old_block, past->_block_size);
         past->_counter++;
         past->_cur_block = past->_cur_block ? 0 : 1;
         success = true;
         /** Past is now ready for writing */
     } while(0);
-    lock_flash();
+    return success;
+}
+
+/**
+ * @brief      Write zeros to eeprom address
+ *
+ * @param[in]  address  The address
+ * @param[in]  length   The length in bytes (must be an even multiple of 4)
+ *
+ * @return     true if writing went well
+ */
+static bool eeprom_zero(uint32_t address, uint32_t length)
+{
+    bool success = false;
+    if (address % 4 == 0) {
+        do {
+            eeprom_program_word(address, 0);
+            address += 4;
+            length -= 4;
+        } while(length != 0);
+    }
     return success;
 }
 
@@ -472,51 +489,14 @@ static bool past_garbage_collect(past_t *past)
   * @param data well, data
   * @retval true if write was successfuk
   */
-static bool flash_write32(uint32_t address, uint32_t data)
+static bool eeprom_write32(uint32_t address, uint32_t data)
 {
     bool success = false;
     if (address % 4 == 0) {
-        uint32_t *p = (uint32_t*) address;
-        flash_program_word(address, data);
-        success = FLASH_SR_EOP & flash_get_status_flags();
-        success &= *p == data; // Verify write
+        eeprom_program_word(address, data);
+       success = true;
     }
     return success;
-}
-
-/**
-  * @brief Read 32 bits from flash
-  * @param address address to read from
-  * @retval data at secified address
-  */
-static uint32_t flash_read32(uint32_t address)
-{
-    uint32_t *p = (uint32_t*) address;
-    return *p;
-}
-
-/**
-  * @brief Lock flash, keeping a lock counter
-  * @retval none
-  */
-static void unlock_flash(void)
-{
-    if (!flash_unlock_count) {
-        flash_unlock();
-    }
-    flash_unlock_count++;
-}
-
-/**
-  * @brief Unlock flash based on lock counter
-  * @retval none
-  */
-static void lock_flash(void)
-{
-    flash_unlock_count--;
-    if (!flash_unlock_count) {
-        flash_lock();
-    }
 }
 
 /**
@@ -532,28 +512,28 @@ static bool copy_parameters(past_t *past, uint32_t src_base, uint32_t dst_base)
     uint32_t src = src_base + HEADER_FIRST_UNIT_OFFSET;
     uint32_t dst = dst_base + HEADER_FIRST_UNIT_OFFSET;
     do {
-        uint32_t id = flash_read32(src);
+        uint32_t id = eeprom_read32(src);
         if (id == PAST_UNIT_ID_END) {
             break;
         }
-        uint32_t size = flash_read32(src + UNIT_SIZE_OFFSET);
+        uint32_t size = eeprom_read32(src + UNIT_SIZE_OFFSET);
         uint32_t aligned_size = size;
         if (aligned_size % 4) {
             aligned_size += 4 - aligned_size % 4;
         }
-        if (id != 0) {
+        if (id != PAST_UNIT_ID_INVALID) {
             for (uint32_t i = 0 && success; i < aligned_size / 4; i++) {
-                success &= flash_write32(dst + UNIT_DATA_OFFSET + 4*i, flash_read32(src + UNIT_DATA_OFFSET + 4*i));
+                success &= eeprom_write32(dst + UNIT_DATA_OFFSET + 4*i, eeprom_read32(src + UNIT_DATA_OFFSET + 4*i));
             }
-            success &= flash_write32(dst + UNIT_SIZE_OFFSET, size);
-            success &= flash_write32(dst, id);
+            success &= eeprom_write32(dst + UNIT_SIZE_OFFSET, size);
+            success &= eeprom_write32(dst, id);
             if (!success) {
                 break;
             }
             dst += UNIT_DATA_OFFSET + aligned_size;
         }
         src += UNIT_DATA_OFFSET + aligned_size;
-    } while (src < src_base + PAST_BLOCK_SIZE);
+    } while (src < src_base + past->_block_size);
     if (success) {
         past->_end_addr = dst;
     }

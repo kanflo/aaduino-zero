@@ -3,6 +3,7 @@ BINARY = main
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON)
+LDSCRIPT = $(COMMON)/stm32fl052_app.ld
 
 OBJS = \
 	$(COMMON)/cli.o \
@@ -17,8 +18,6 @@ OBJS = \
 	$(COMMON)/tick.o \
 	$(COMMON)/dbg_printf.o \
 	$(COMMON)/mini-printf.o
-
-#    past.o \
 
 include $(ROOT)/libopencm3.target.mk
 

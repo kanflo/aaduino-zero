@@ -3,8 +3,12 @@ BINARY = main
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE
+LDSCRIPT = $(COMMON)/stm32fl052_app.ld
+
+DEBUG := 0
 
 OBJS = \
+	$(COMMON)/past.o \
 	$(COMMON)/cli.o \
 	$(COMMON)/sw_i2c.o \
 	$(COMMON)/spi_driver.o \
@@ -18,7 +22,6 @@ OBJS = \
 	$(COMMON)/dbg_printf.o \
 	$(COMMON)/mini-printf.o
 
-#    past.o \
 
 include $(ROOT)/libopencm3.target.mk
 

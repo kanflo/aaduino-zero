@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <flash.h>
 #include "cli.h"
 #include "dbg_printf.h"
 #include "hw.h"
@@ -34,9 +35,16 @@
 #include "tmp102.h"
 #include "rfm69.h"
 #include "spiflash.h"
+#include "past.h"
+
+static past_t g_past;
+
+/** Linker symbols */
+extern long past_start, past_block_size;
 
 
 static void blinken_halt(uint32_t blink_count);
+static void dump_mem(uint32_t address, uint32_t length);
 
 #define RX_BUF_SIZE  (16)
 static ringbuf_t rx_buf;
@@ -46,6 +54,11 @@ static uint8_t rx_buffer[2*RX_BUF_SIZE];
 
 static void help_handler(uint32_t argc, char *argv[]);
 static void halt_handler(uint32_t argc, char *argv[]);
+static void past_format_handler(uint32_t argc, char *argv[]);
+static void past_read_handler(uint32_t argc, char *argv[]);
+static void past_write_handler(uint32_t argc, char *argv[]);
+static void past_erase_handler(uint32_t argc, char *argv[]);
+static void past_dump_handler(uint32_t argc, char *argv[]);
 
 cli_command_t commands[] = {
     {
@@ -53,15 +66,50 @@ cli_command_t commands[] = {
         .handler = help_handler,
         .min_arg = 0, .max_arg = 0,
         .help = "Print help",
-        .usage = "no usage"
+        .usage = ""
     },
     {
         .cmd = "halt",
         .handler = halt_handler,
-        .min_arg = 0, .max_arg = 0,
+        .min_arg = 0, .max_arg = 64,
         .help = "Halt the system",
-        .usage = "no usage"
-    }
+        .usage = "<arg> ... <arg>"
+    },
+    {
+        .cmd = "pastformat",
+        .handler = past_format_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Format past",
+        .usage = ""
+    },
+    {
+        .cmd = "pastread",
+        .handler = past_read_handler,
+        .min_arg = 1, .max_arg = 1,
+        .help = "Read unit from past",
+        .usage = "<unit>"
+    },
+    {
+        .cmd = "pastwrite",
+        .handler = past_write_handler,
+        .min_arg = 2, .max_arg = 2,
+        .help = "Write unit to past",
+        .usage = "<unit> <data>"
+    },
+    {
+        .cmd = "pasterase",
+        .handler = past_erase_handler,
+        .min_arg = 1, .max_arg = 1,
+        .help = "Erase unit from past",
+        .usage = "<unit>"
+    },
+    {
+        .cmd = "pastdump",
+        .handler = past_dump_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Dump past",
+        .usage = ""
+    },
     // TODO: More commands to be added
 };
 
@@ -77,10 +125,71 @@ static void help_handler(uint32_t argc, char *argv[])
 
 static void halt_handler(uint32_t argc, char *argv[])
 {
-    (void) argc;
-    (void) argv;
+    for (uint32_t i = 0; i < argc; i++) {
+        dbg_printf("%d '%s'\n", i, argv[i]);
+    }
     dbg_printf("Halted\n");
     blinken_halt(2);
+}
+
+static void past_format_handler(uint32_t argc, char *argv[])
+{
+    (void) argv;
+    (void) argc;
+    if (!past_format(&g_past)) {
+        dbg_printf("Past formatting failed\n");
+    }
+    if (past_init(&g_past)) {
+        dbg_printf("Past init success\n");
+    } else {
+        dbg_printf("Past init failed\n");
+    }
+}
+
+static void past_read_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    uint8_t *data;
+    uint32_t length;
+    uint32_t unit_id = atoi(argv[1]);
+    if (past_read_unit(&g_past, unit_id, (const void**)&data, &length)) {
+        dbg_printf("'%s' (%d bytes)\n", data, length);
+    } else {
+        dbg_printf("Unit %d not found\n", unit_id);
+    }
+}
+
+static void past_write_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    uint32_t unit_id = atoi(argv[1]);
+    if (past_write_unit(&g_past, unit_id, (void*)argv[2], strlen(argv[2]) + 1)) {
+        dbg_printf("Wrote unit %d (%d bytes)\n", unit_id, strlen(argv[2]) + 1);
+    } else {
+        dbg_printf("Failed to write unit %d\n", unit_id);
+    }
+}
+
+static void past_erase_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    uint32_t unit_id = atoi(argv[1]);
+    if (past_erase_unit(&g_past, unit_id)) {
+        dbg_printf("Erased unit %d\n", unit_id);
+    } else {
+        dbg_printf("Failed to erase unit %d\n", unit_id);
+    }
+}
+
+static void past_dump_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    dbg_printf("Past block 0:\n");
+    dump_mem(g_past.blocks[0], 1024);
+    dbg_printf("\nPast block 1:\n");
+    dump_mem(g_past.blocks[1], 1024);
+
 }
 
 static void blinken_halt(uint32_t blink_count)
@@ -96,6 +205,65 @@ static void blinken_halt(uint32_t blink_count)
     }
 }
 
+#define LINE_WIDTH  (16)
+
+static void dump_mem(uint32_t address, uint32_t length)
+{
+    uint8_t *p = (uint8_t*) address;
+    dbg_printf("%08x...%08x:", address, address + length - 1);
+    for (uint32_t i = 0; i < length; i++) {
+        if (i % LINE_WIDTH == 0) {
+            dbg_printf("\n");
+            dbg_printf("  %08x : ", address + i);
+        }
+        dbg_printf(" %02x", p[i]);
+    }
+    dbg_printf("\n");
+}
+
+#if 0
+static void flash_test(void)
+{
+    dbg_printf("\n\n *** flash test ***\n");
+
+    dump_mem(0x08007000, 16);
+    flash_unlock();
+    for (int i = 0; i < 1024; i+=4) {
+        flash_program_word(0x08007000 + i, 0xffffffff);
+    }
+    flash_lock();
+
+    dump_mem(0x08007000, 16);
+
+    dbg_printf("\n>>> Erasing 0x08007000\n");
+    flash_unlock();
+    flash_erase_page(0x08007000);
+    flash_lock();
+    dump_mem(0x08007000, 16);
+
+    dbg_printf("\n>>> Programming 0x08007000\n");
+    flash_unlock();
+    flash_program_word(0x08007000, 0x000000ff);
+    flash_lock();
+    dump_mem(0x08007000, 16);
+
+    dbg_printf("\n>>> Programming 0x08007000\n");
+    flash_unlock();
+    flash_program_word(0x08007000, 0xff000000);
+    flash_lock();
+    dump_mem(0x08007000, 16);
+
+    dbg_printf("\n>>> Programming 0x08007000\n");
+    flash_unlock();
+    flash_program_word(0x08007000, 0x00000000);
+    flash_lock();
+    dump_mem(0x08007000, 16);
+
+    dbg_printf("\n---\ndone\n");
+    while(1) ;
+}
+#endif
+
 /**
   * @brief Ye olde main
   * @retval preferably none
@@ -108,6 +276,19 @@ int main(void)
 
     ringbuf_init(&rx_buf, (uint8_t*) rx_buffer, sizeof(rx_buffer));
     hw_init(&rx_buf);
+
+    g_past.blocks[0] = (uint32_t) &past_start;
+    g_past.blocks[1] = (uint32_t) &past_start + (uint32_t) &past_block_size;
+    g_past._block_size = (uint32_t) &past_block_size;
+
+    if (!past_init(&g_past)) {
+        dbg_printf("Error: past init failed!\n");
+        dbg_printf("Past block 0:\n");
+        dump_mem(g_past.blocks[0], 64);
+        dbg_printf("Past block 1:\n");
+        dump_mem(g_past.blocks[1], 64);
+        blinken_halt(3);
+    }
 
     dbg_printf("\n\nWelcome to the AAduino Zero CLI\n");
 

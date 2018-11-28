@@ -36,6 +36,7 @@ typedef uint32_t past_id_t;
   */
 typedef struct {
     uint32_t blocks[2];
+    uint32_t _block_size;
     uint32_t _cur_block;
     uint32_t _counter;
     uint32_t _end_addr;

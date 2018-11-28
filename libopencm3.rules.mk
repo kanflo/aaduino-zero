@@ -42,7 +42,11 @@ STFLASH		= $(shell which st-flash)
 STYLECHECK	:= /checkpatch.pl
 STYLECHECKFLAGS	:= --no-tree -f --terse --mailback
 STYLECHECKFILES	:= $(shell find . -name '*.[ch]')
+ifeq ($(DEBUG),1)
+OPT		:= -O0
+else
 OPT		:= -Os
+endif
 CSTD		?= -std=c99
 
 
@@ -212,7 +216,7 @@ print-%:
 
 clean:
 	@printf "  CLEAN\n"
-	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.map generated.* ${OBJS} $(OBJS:.o=.d)
+	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.map generated.* ${OBJS} ${OBJS:%.o:%.d}
 
 stylecheck: $(STYLECHECKFILES:=.stylecheck)
 styleclean: $(STYLECHECKFILES:=.styleclean)
