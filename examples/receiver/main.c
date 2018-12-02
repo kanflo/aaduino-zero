@@ -87,7 +87,8 @@ static void handle_temperature_frame(uint8_t src, uint8_t *payload, uint8_t len,
   */
 static void dump_frame(rfm69_link_frame_t *frame, uint8_t len)
 {
-    dbg_printf("%02x -> %02x cnt:%2d flags:%x : [ ", frame->_src, frame->_dst, frame->_cntr_flags >> 4, frame->_cntr_flags & 0xf);
+    dbg_printf("%02x -> %02x ", frame->_src, frame->_dst);
+    dbg_printf("cnt:%02d flags:%x : [ ", FRAME_COUNTER(frame->_cntr_flags), FRAME_FLAGS(frame->_cntr_flags));
     for (uint8_t i = 0; i < len; i++) {
         dbg_printf("%02x ", frame->payload[i]);
     }
