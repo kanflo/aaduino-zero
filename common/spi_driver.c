@@ -207,6 +207,5 @@ void spi1_isr(void)
     if (sr & SPI_SR_OVR) {
         (void) SPI_DR(SPI1);
         (void) SPI_SR(SPI1);
-        dbg_printf("ISR: Overflow\n");
     }
 }
