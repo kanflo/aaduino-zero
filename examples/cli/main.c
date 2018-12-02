@@ -28,14 +28,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <flash.h>
+#include <gpio.h>
 #include "cli.h"
 #include "dbg_printf.h"
 #include "hw.h"
 #include "tick.h"
 #include "tmp102.h"
 #include "rfm69.h"
+#include "rfm69_link.h"
 #include "spiflash.h"
 #include "past.h"
+#include "pastunits.h"
 
 static past_t g_past;
 
@@ -59,6 +62,9 @@ static void past_read_handler(uint32_t argc, char *argv[]);
 static void past_write_handler(uint32_t argc, char *argv[]);
 static void past_erase_handler(uint32_t argc, char *argv[]);
 static void past_dump_handler(uint32_t argc, char *argv[]);
+static void temperature_handler(uint32_t argc, char *argv[]);
+static void temperature_alert_handler(uint32_t argc, char *argv[]);
+static void rfm_handler(uint32_t argc, char *argv[]);
 
 cli_command_t commands[] = {
     {
@@ -106,8 +112,29 @@ cli_command_t commands[] = {
     {
         .cmd = "pastdump",
         .handler = past_dump_handler,
-        .min_arg = 0, .max_arg = 0,
+        .min_arg = 0, .max_arg = 1,
         .help = "Dump past",
+        .usage = "[<size>]"
+    },
+    {
+        .cmd = "temp",
+        .handler = temperature_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Show TMP102 temperature",
+        .usage = ""
+    },
+    {
+        .cmd = "tempalert",
+        .handler = temperature_alert_handler,
+        .min_arg = 0, .max_arg = 2,
+        .help = "Show TMP102 alert",
+        .usage = ""
+    },
+    {
+        .cmd = "rfm",
+        .handler = rfm_handler,
+        .min_arg = 0, .max_arg = 3,
+        .help = "Handle RFM69",
         .usage = ""
     },
     // TODO: More commands to be added
@@ -140,9 +167,9 @@ static void past_format_handler(uint32_t argc, char *argv[])
         dbg_printf("Past formatting failed\n");
     }
     if (past_init(&g_past)) {
-        dbg_printf("Past init success\n");
+        dbg_printf("OK\n");
     } else {
-        dbg_printf("Past init failed\n");
+        dbg_printf("ERROR\n");
     }
 }
 
@@ -154,6 +181,7 @@ static void past_read_handler(uint32_t argc, char *argv[])
     uint32_t unit_id = atoi(argv[1]);
     if (past_read_unit(&g_past, unit_id, (const void**)&data, &length)) {
         dbg_printf("'%s' (%d bytes)\n", data, length);
+        dump_mem((uint32_t) data, length);
     } else {
         dbg_printf("Unit %d not found\n", unit_id);
     }
@@ -185,11 +213,189 @@ static void past_dump_handler(uint32_t argc, char *argv[])
 {
     (void) argc;
     (void) argv;
+    uint32_t dump_size = (uint32_t) &past_block_size;
+    if (argc == 2) {
+        dump_size = atoi(argv[1]);
+    }
     dbg_printf("Past block 0:\n");
-    dump_mem(g_past.blocks[0], 1024);
+    dump_mem(g_past.blocks[0], dump_size);
     dbg_printf("\nPast block 1:\n");
-    dump_mem(g_past.blocks[1], 1024);
+    dump_mem(g_past.blocks[1], dump_size);
+}
 
+static void temperature_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    uint32_t t = 1000 * tmp102_readTempC();
+    dbg_printf("%d.%d°C\n", t/1000, (t%1000)/100);
+}
+
+static void temperature_alert_handler(uint32_t argc, char *argv[])
+{
+    switch (argc) {
+        case 3:
+            dbg_printf("low:%d high:%d\n", atoi(argv[1]), atoi(argv[2]));
+            break;
+        case 1:
+            dbg_printf("%d\n", gpio_get(TEMP_ALERT_PORT, TEMP_ALERT_PIN));
+            break;
+        default:
+            break;
+    }
+}
+
+static void dump_rfm_settings(void)
+{
+    uint32_t *temp, len;
+    char *temp2;
+    dbg_printf("Node id    : ");
+    if (past_read_unit(&g_past, past_rfm_node_id, (const void **) &temp, &len)) {
+        dbg_printf("%d\n", *temp);
+    } else {
+        dbg_printf("NA\n");
+    }
+    dbg_printf("Network id : ");
+    if (past_read_unit(&g_past, past_rfm_net_id, (const void **) &temp, &len)) {
+        dbg_printf("%d\n", *temp);
+    } else {
+        dbg_printf("NA\n");
+    }
+    dbg_printf("Gateway id : ");
+    if (past_read_unit(&g_past, past_rfm_gateway_id, (const void **) &temp, &len)) {
+        dbg_printf("%d\n", *temp);
+    } else {
+        dbg_printf("NA\n");
+    }
+    dbg_printf("Max power  : ");
+    if (past_read_unit(&g_past, past_rfm_max_power, (const void **) &temp, &len)) {
+        dbg_printf("%d\n", *temp);
+    } else {
+        dbg_printf("NA\n");
+    }
+    dbg_printf("AES key    : ");
+    if (past_read_unit(&g_past, past_rfm_key, (const void **) &temp2, &len)) {
+        dbg_printf("%s\n", temp2);
+    } else {
+        dbg_printf("NA\n");
+    }
+}
+
+static void rfm_init(void)
+{
+    uint32_t *node_id, *network_id, *gateway_id, *max_power, len;
+    char *aesKey;
+    if (!past_read_unit(&g_past, past_rfm_node_id, (const void **) &node_id, &len)) {
+        dbg_printf("ERROR: RFM node id missing\n");
+        return;
+    }
+    if (!past_read_unit(&g_past, past_rfm_net_id, (const void **) &network_id, &len)) {
+        dbg_printf("ERROR: RFM network id missing\n");
+        return;
+    }
+    if (!past_read_unit(&g_past, past_rfm_gateway_id, (const void **) &gateway_id, &len)) {
+        dbg_printf("ERROR: RFM gateway id missing\n");
+        return;
+    }
+    if (!past_read_unit(&g_past, past_rfm_max_power, (const void **) &max_power, &len)) {
+        dbg_printf("ERROR: RFM max power missing\n");
+        return;
+    }
+    if (!past_read_unit(&g_past, past_rfm_key, (const void **) &aesKey, &len)) {
+        dbg_printf("ERROR: RFM ARM key missing\n");
+        return;
+    }
+
+    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
+    rfm69_reset();
+    if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
+        dbg_printf("ERROR: No RFM69CW found\n");
+        return;
+    } else {
+        rfm69_sleep(); // init RF module and put it to sleep
+        rfm69_setPowerDBm(*max_power); // // set output power, +13 dBm
+        rfm69_setCSMA(true); // enable CSMA/CA algorithm
+        rfm69_setAutoReadRSSI(true);
+        (void) rfm69_setAESEncryption((void*) aesKey, 16);
+        rfm69link_setNodeId(*node_id);
+        rfm69link_setNetworkId(*network_id);
+        dbg_printf("OK\n");
+    }
+}
+
+static void rfm_set_uint32(parameter_id_t id, uint32_t value)
+{
+    dbg_printf("%d:%d\n", id, value);
+    if (past_write_unit(&g_past, id, (void*)&value, sizeof(value))) {
+        dbg_printf("OK\n");
+    } else {
+        dbg_printf("ERROR\n");
+    }
+}
+
+static void rfm_set_str(parameter_id_t id, char *str, uint32_t len)
+{
+   if (past_write_unit(&g_past, id, (void*)str, len)) {
+        dbg_printf("OK\n");
+    } else {
+        dbg_printf("ERROR\n");
+    }
+}
+
+static void rfm_tx(uint32_t dst, char *data)
+{
+    rfm69_link_frame_t frame;
+    dst &= 0xff;
+#if 0
+    dbg_printf("Sending %d bytes to %d\n", strlen(data), dst);
+    dbg_printf("%s\n", data);
+    dump_mem((uint32_t) data, strlen(data));
+#endif
+    memcpy((void*) frame.payload, (void*) data, strlen(data));
+    uint8_t status = rfm69link_sendFrame(dst, &frame, strlen(data));
+    if (!status) {
+        dbg_printf("ERROR:No response\n");
+    } else {
+        dbg_printf("OK:%d:%d\n", status, frame.rssi);
+    }
+}
+
+static void rfm_handler(uint32_t argc, char *argv[])
+{
+    char *cmd = argv[1];
+    if (argc == 1) {
+        dump_rfm_settings();
+    } else if (argc == 2) {
+        if (strcmp(cmd, "init") == 0) {
+            rfm_init();
+        }
+    } else if (argc == 3) {
+        if (strcmp(cmd, "id") == 0) {
+            rfm_set_uint32(past_rfm_node_id, atoi(argv[2]));
+        } else if (strcmp(cmd, "net") == 0) {
+            rfm_set_uint32(past_rfm_net_id, atoi(argv[2]));
+        } else if (strcmp(cmd, "gw") == 0) {
+            rfm_set_uint32(past_rfm_gateway_id, atoi(argv[2]));
+        } else if (strcmp(cmd, "pwr") == 0) {
+            rfm_set_uint32(past_rfm_max_power, atoi(argv[2]));
+        } else if (strcmp(cmd, "key") == 0) {
+            if (strlen(argv[2]) != 16) {
+                dbg_printf("ERROR: key must be 16 bytes\n");
+            } else {
+                rfm_set_str(past_rfm_key, argv[2], 16);
+            }
+        } else {
+            dbg_printf("ERROR: Illegal command\n");
+        }
+    } else if (argc == 4) {
+        if (strcmp(cmd, "tx") == 0) {
+            rfm_tx(atoi(argv[2]), argv[3]);
+        } else {
+            dbg_printf("ERROR: Illegal command\n");
+        }
+    } else {
+        dbg_printf("ERROR: Wrong number of parameters\n");
+    }
 }
 
 static void blinken_halt(uint32_t blink_count)
@@ -301,20 +507,6 @@ int main(void)
     if (tmp102_init()) {
         uint32_t t = 1000 * tmp102_readTempC();
         dbg_printf("Temperature is %d.%d°C\n", t/1000, (t%1000)/100);
-    }
-
-    rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
-    rfm69_reset();
-    if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
-        dbg_printf("No RFM69CW found\n");
-    } else {
-        dbg_printf("RFM69CW found\n");
-
-        rfm69_sleep(); // init RF module and put it to sleep
-        rfm69_setPowerDBm(13); // // set output power, +13 dBm
-        rfm69_setCSMA(true); // enable CSMA/CA algorithm
-        rfm69_setAutoReadRSSI(true);
-        (void) rfm69_setAESEncryption((void*) "sampleEncryptKey", 16);
     }
 
     dbg_printf("Try 'help <return>' for, well, help.\n");
