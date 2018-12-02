@@ -86,40 +86,47 @@ float tmp102_readTempC(void)
 // Converts readTempC result to degrees F
 float tmp102_readTempF(void)
 {
+    /** @todo */
     return 0;
 }
 
 // Switch sensor to low power mode
 void tmp102_sleep(void)
 {
+    /** @todo */
 }
 
 // Wakeup and start running in normal power mode
 void tmp102_wakeup(void)
 {
+    /** @todo */
 }
 
 // Returns state of Alert register
 bool tmp102_alert(void)
 {
+    /** @todo */
     return false;
 }
 
 // Sets T_LOW (degrees C) alert threshold
 void tmp102_setLowTempC(float temperature)
 {
+    /** @todo */
     (void) temperature;
 }
 
 // Sets T_HIGH (degrees C) alert threshold
 void tmp102_setHighTempC(float temperature)
 {
+    /** @todo */
     (void) temperature;
 }
 
 // Sets T_LOW (degrees F) alert threshold
 void tmp102_setLowTempF(float temperature)
 {
+    /** @todo */
     (void) temperature;
 }
 
@@ -138,21 +145,23 @@ float tmp102_readLowTempC(void)
 // Reads T_HIGH register in C
 float tmp102_readHighTempC(void)
 {
+    /** @todo */
     return 0;
 }
 
 // Reads T_LOW register in F
 float tmp102_readLowTempF(void)
 {
+    /** @todo */
     return 0;
 }
 
 // Reads T_HIGH register in F
 float tmp102_readHighTempF(void)
 {
+    /** @todo */
     return 0;
 }
-
 
 // Set the conversion rate (0-3)
 // 0 - 0.25 Hz
@@ -161,27 +170,27 @@ float tmp102_readHighTempF(void)
 // 3 - 8 Hz
 void tmp102_setConversionRate(uint8_t rate)
 {
+    /** @todo */
     (void) rate;
 }
-
 
 // Enable or disable extended mode
 // 0 - disabled (-55C to +128C)
 // 1 - enabled  (-55C to +150C)
 void tmp102_setExtendedMode(bool mode)
 {
+    /** @todo */
     (void) mode;
 }
-
 
 // Set the polarity of Alert
 // 0 - Active LOW
 // 1 - Active HIGH
 void tmp102_setAlertPolarity(bool polarity)
 {
+    /** @todo */
     (void) polarity;
 }
-
 
 // Set the number of consecutive faults
 // 0 - 1 fault
@@ -190,14 +199,15 @@ void tmp102_setAlertPolarity(bool polarity)
 // 3 - 6 faults
 void tmp102_setFault(uint8_t faultSetting)
 {
+    /** @todo */
     (void) faultSetting;
 }
-
 
 // Set Alert type
 // 0 - Comparator Mode: Active from temp > T_HIGH until temp < T_LOW
 // 1 - Thermostat Mode: Active when temp > T_HIGH until any read operation occurs
 void tmp102_setAlertMode(bool mode)
 {
+    /** @todo */
     (void) mode;
 }
