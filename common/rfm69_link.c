@@ -49,6 +49,17 @@ static uint8_t _node_id = 0;
 void rfm69link_setNodeId(uint8_t node_id)
 {
     _node_id = node_id;
+    rfm69_setAddress(node_id);
+}
+
+/**
+ * @brief      Set network ID for this link node
+ *
+ * @param[in]  net_id  Network id
+ */
+void rfm69link_setNetworkId(uint8_t net_id)
+{
+    rfm69_setNetwork(net_id);
 }
 
 /**
@@ -59,36 +70,49 @@ void rfm69link_setNodeId(uint8_t node_id)
  * @param[in]  length   Payload length
  *
  * @return     rfm69_ack for successful transmission
- *             rfm69_lat | rfm69_lat if receiver requested LAT
+ *             rfm69_ack | rfm69_lat if receiver requested LAT
  *             0 for failure 
  */
 uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length)
 {
-    uint8_t tx_len;
+    uint8_t tx_len, tx_status = 0;
     uint8_t attempt = 0;
     if (!frame) {
         return 0;
     }
     frame->_dst = dst;
     frame->_src = _node_id;
-    frame->_cntr_flags = (((_counter) & 0xf) << 4) | rfm69_req_ack;
+    frame->_cntr_flags = ((_counter & FRAME_FLAGS_MASK) << 4) | rfm69_req_ack;
     do {
-        //dbg_printf("TX attempt #%d\n", attempt);
+#ifdef CONFIG_LINK_RX_DEBUG
+        dbg_printf("TX attempt #%d\n", attempt);
+#endif // CONFIG_LINK_RX_DEBUG
         tx_len = rfm69_send((uint8_t*) frame, LINK_OVERHEAD + length);
         if (tx_len > 0) {
-            rfm69_link_flag_t ack;
+            rfm69_link_frame_t ack;
             uint8_t len = rfm69_receive((char*) &ack, LINK_OVERHEAD + RFM69_LINK_MAX_FRAME);
             if (!len) {
-                delay_ms(100); // @todo: listen to RFM pin for RX done, or at lest query the darn thing
+                /** @todo: listen to RFM pin for RX done, or at lest query the darn thing */
+                delay_ms(100);
                 len = rfm69_receive((char*) &ack, LINK_OVERHEAD + RFM69_LINK_MAX_FRAME);
             }
+#ifdef CONFIG_LINK_RX_DEBUG
+            dbg_printf("Got ack\n");
+#endif // CONFIG_LINK_RX_DEBUG
             tx_len = len;
             rfm69_sleep();
             if (!len) {
-                //dbg_printf("No ACK\n");
+#ifdef CONFIG_LINK_RX_DEBUG
+                dbg_printf("No ACK\n");
+#endif // CONFIG_LINK_RX_DEBUG
                 delay_ms(LINK_TX_RETRY_SLEEP_MS); // @todo: low power sleep
             } else {
-                _counter++;
+                if (FRAME_COUNTER(frame->_cntr_flags) != FRAME_COUNTER(ack._cntr_flags)) {
+                    dbg_printf("Error: sender acked frame %d when I sent %d\n", FRAME_COUNTER(ack._cntr_flags), FRAME_COUNTER(frame->_cntr_flags));
+                    /** @todo: handle */
+                }
+                tx_status = FRAME_FLAGS(ack._cntr_flags);
+                _counter = (_counter + 1) & FRAME_FLAGS_MASK;
                 frame->rssi = rfm69_getRSSI();
             }
         }
@@ -96,9 +120,8 @@ uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t leng
     } while(attempt < LINK_TX_RETRY_COUNT && tx_len == 0);
 
     rfm69_sleep();
-    return tx_len;
+    return tx_status;
 }
-
 
 /**
  * @brief      Receive a frame
@@ -119,7 +142,6 @@ bool rfm69link_receiveFrame(uint8_t *src, rfm69_link_frame_t *frame, uint8_t *le
     bool success = false;
     uint8_t len = rfm69_receive((char*) frame, LINK_OVERHEAD + RFM69_LINK_MAX_FRAME);
     if (len >= LINK_OVERHEAD) {
-
         frame->rssi = rfm69_getRSSI();
         rfm69_sleep();
 #ifdef CONFIG_LINK_RX_DEBUG
@@ -134,11 +156,12 @@ bool rfm69link_receiveFrame(uint8_t *src, rfm69_link_frame_t *frame, uint8_t *le
             *length = len - LINK_OVERHEAD;
             *src = frame->_src;
             success = true;
-            if (frame->_cntr_flags & rfm69_req_ack) {
+            if (FRAME_FLAGS(frame->_cntr_flags) & rfm69_req_ack) {
                 rfm69_link_frame_t ack; /** @todo: optimize stack usage */
                 ack._src = frame->_dst;
                 ack._dst = frame->_src;
-                ack._cntr_flags = (frame->_cntr_flags & 0xf0) | rfm69_ack; // sender's counter + ack bit
+                /** sender's counter + ack bit */
+                ack._cntr_flags = (frame->_cntr_flags & (FRAME_COUNTER_MASK << FRAME_COUNTER_SHIFT)) | rfm69_ack;
 #ifdef CONFIG_LINK_RX_DEBUG
                 dbg_printf("Sending ack\n");
 #endif // CONFIG_LINK_RX_DEBUG

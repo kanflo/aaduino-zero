@@ -33,6 +33,13 @@ typedef enum {
     rfm69_lat     = 1 << 2
 } rfm69_link_flag_t;
 
+#define FRAME_COUNTER_SHIFT   (4)
+#define FRAME_COUNTER_MASK  (0xf)
+#define FRAME_FLAGS_SHIFT     (0)
+#define FRAME_FLAGS_MASK    (0xf)
+#define FRAME_COUNTER(_cntr_flags) (((_cntr_flags) >> FRAME_COUNTER_SHIFT) & FRAME_COUNTER_MASK)
+#define FRAME_FLAGS(_cntr_flags)   ((_cntr_flags) & FRAME_FLAGS_MASK)
+
 typedef struct {
     uint8_t _dst;
     uint8_t _src;
@@ -50,6 +57,13 @@ typedef struct {
 void rfm69link_setNodeId(uint8_t node_id);
 
 /**
+ * @brief      Set network ID for this link node
+ *
+ * @param[in]  net_id  Network id
+ */
+void rfm69link_setNetworkId(uint8_t net_id);
+
+/**
  * @brief      Send frame over RFM69 link
  *
  * @param[in]  dst      Destinaton address
@@ -57,7 +71,7 @@ void rfm69link_setNodeId(uint8_t node_id);
  * @param[in]  length   Payload length
  *
  * @return     rfm69_ack for successful transmission
- *             rfm69_lat | rfm69_lat if receiver requested LAT
+ *             rfm69_ack | rfm69_lat if receiver requested LAT
  *             0 for failure 
  */
 uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length);
