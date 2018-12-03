@@ -28,6 +28,7 @@
 #include "tick.h"
 
 static volatile uint64_t tick_ms;
+static bool tick_inited = false;
 
 /**
   * @brief Initialize the systick module
@@ -35,13 +36,30 @@ static volatile uint64_t tick_ms;
   */
 void systick_init(void)
 {
-    // 16M counts per second
-    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
-    // 16e6/1000 = 16000 overflows per second
-    // SysTick interrupt every N clock pulses: set reload to N-1
-    systick_set_reload(16000);
-    systick_interrupt_enable();
-    systick_counter_enable();
+    if (!tick_inited) {
+        /** @todo: split init/deinit into init/start/stop */
+        // 16M counts per second
+        systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
+        // 16e6/1000 = 16000 overflows per second
+        // SysTick interrupt every N clock pulses: set reload to N-1
+        systick_set_reload(16000);
+        systick_interrupt_enable();
+        systick_counter_enable();
+        tick_inited = true;
+    }
+}
+
+/**
+  * @brief Deinitialize the systick module
+  * @retval none
+  */
+void systick_deinit(void)
+{
+    if (tick_inited) {
+        systick_interrupt_disable();
+        systick_counter_disable();
+        tick_inited = false;
+    }
 }
 
 /**
@@ -52,8 +70,16 @@ void systick_init(void)
 
 void delay_ms(uint32_t delay)
 {
+    bool lazy_inited = false;
+    if (!tick_inited) {
+      systick_init();
+      lazy_inited = true;
+    }
     uint64_t start = tick_ms;
     while (tick_ms < start + delay) ;
+    if (lazy_inited) {
+      systick_deinit();
+    }
 }
 
 /**

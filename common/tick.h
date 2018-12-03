@@ -34,6 +34,12 @@
 void systick_init(void);
 
 /**
+  * @brief Deinitialize the systick module
+  * @retval none
+  */
+void systick_deinit(void);
+
+/**
   * @brief Busy wait for a given time
   * @param delay time in milliseconds
   * @retval none

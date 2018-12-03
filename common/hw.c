@@ -61,7 +61,9 @@ void hw_init(ringbuf_t *usart_rx_buf)
 {
     rx_buf = usart_rx_buf;
     clock_init();
+#ifndef CONFIG_LOW_POWER_MODE
     systick_init();
+#endif // CONFIG_LOW_POWER_MODE
     gpio_init();
     usart_init();
     exti_init();
