@@ -29,6 +29,10 @@
 #include <stdlib.h>
 #include <flash.h>
 #include <gpio.h>
+#include <pwr.h>
+#include <rtc.h>
+#include <libopencmsis/core_cm3.h>
+#include "rtcdrv.h"
 #include "cli.h"
 #include "dbg_printf.h"
 #include "hw.h"
@@ -39,6 +43,11 @@
 #include "spiflash.h"
 #include "past.h"
 #include "pastunits.h"
+
+/** Running in low power mode is experimental and will make attaching via the
+ * BMP fail which can be fixed by returning to normal power mode.
+ */
+static bool low_power = false;
 
 static past_t g_past;
 
@@ -65,6 +74,8 @@ static void past_dump_handler(uint32_t argc, char *argv[]);
 static void temperature_handler(uint32_t argc, char *argv[]);
 static void temperature_alert_handler(uint32_t argc, char *argv[]);
 static void rfm_handler(uint32_t argc, char *argv[]);
+static void rtc_handler(uint32_t argc, char *argv[]);
+static void power_handler(uint32_t argc, char *argv[]);
 
 cli_command_t commands[] = {
     {
@@ -136,6 +147,20 @@ cli_command_t commands[] = {
         .min_arg = 0, .max_arg = 3,
         .help = "Handle RFM69",
         .usage = ""
+    },
+    {
+        .cmd = "rtc",
+        .handler = rtc_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Handle RTC",
+        .usage = ""
+    },
+    {
+        .cmd = "power",
+        .handler = power_handler,
+        .min_arg = 1, .max_arg = 1,
+        .help = "Handle low power mode",
+        .usage = "<low | normal>"
     },
     // TODO: More commands to be added
 };
@@ -233,6 +258,7 @@ static void temperature_handler(uint32_t argc, char *argv[])
 
 static void temperature_alert_handler(uint32_t argc, char *argv[])
 {
+    /** @todo Work in progress */
     switch (argc) {
         case 3:
             dbg_printf("low:%d high:%d\n", atoi(argv[1]), atoi(argv[2]));
@@ -398,8 +424,47 @@ static void rfm_handler(uint32_t argc, char *argv[])
     }
 }
 
+static void rtc_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    //uint32_t ssr = RTC_SSR;
+    uint32_t tr = RTC_TR;
+    //uint32_t dr = RTC_DR;
+
+    uint32_t ht = (tr >> RTC_TR_HT_SHIFT) & RTC_TR_HT_MASK;
+    uint32_t hu = (tr >> RTC_TR_HU_SHIFT) & RTC_TR_HU_MASK;
+    uint32_t mt = (tr >> RTC_TR_MNT_SHIFT) & RTC_TR_MNT_MASK;
+    uint32_t mu = (tr >> RTC_TR_MNU_SHIFT) & RTC_TR_MNU_MASK;
+    uint32_t st = (tr >> RTC_TR_ST_SHIFT) & RTC_TR_ST_MASK;
+    uint32_t su = (tr >> RTC_TR_SU_SHIFT) & RTC_TR_SU_MASK;
+
+    dbg_printf("Time: %d%d:", ht, hu);
+    dbg_printf("%d%d:", mt, mu);
+    dbg_printf("%d%d\n", st, su);
+    dbg_printf("RTC counter: %d\n", rtcdrv_get_counter());
+}
+
+static void power_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    if (strcmp(argv[1], "low") == 0) {
+        systick_deinit();
+        low_power = true;
+        dbg_printf("OK\n");
+    } else if (strcmp(argv[1], "normal") == 0) {
+        systick_init();
+        dbg_printf("OK\n");
+        low_power = false;
+    } else {
+        dbg_printf("Error: illegal argument\n");
+    }
+}
+
+
 static void blinken_halt(uint32_t blink_count)
 {
+    delay_ms(1);
     while(1) {
         for (uint32_t i = 0; i < blink_count; i++) {
             hw_set_led(true);
@@ -483,6 +548,9 @@ int main(void)
     ringbuf_init(&rx_buf, (uint8_t*) rx_buffer, sizeof(rx_buffer));
     hw_init(&rx_buf);
 
+    rtcdrv_init();
+    rtcdrv_set_wakeup(1);
+
     g_past.blocks[0] = (uint32_t) &past_start;
     g_past.blocks[1] = (uint32_t) &past_start + (uint32_t) &past_block_size;
     g_past._block_size = (uint32_t) &past_block_size;
@@ -513,6 +581,7 @@ int main(void)
     dbg_printf("%% ");
     while(1) {
         uint16_t b;
+        /** @todo. replace UART ringbuffer with event buffer like in OpenDPS */
         while (ringbuf_get(&rx_buf, &b)) {
             if (b == '\r') {
                 // Don't care
@@ -529,6 +598,13 @@ int main(void)
                 dbg_printf("%c", b & 0xff);
                 line[i++] = b;
             }
+        }
+        if (low_power) {
+            dbg_printf(".");
+            /** @todo: check if this is the right way to do it */
+            PWR_CR |= PWR_CR_LPSDSR;
+            pwr_set_stop_mode();
+            __WFI();
         }
     }
     return 0;
