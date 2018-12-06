@@ -30,7 +30,6 @@
 #include <flash.h>
 #include <gpio.h>
 #include <pwr.h>
-#include <libopencmsis/core_cm3.h>
 #include "rtcdrv.h"
 #include "cli.h"
 #include "dbg_printf.h"
@@ -78,6 +77,9 @@ static void temperature_alert_handler(uint32_t argc, char *argv[]);
 static void rfm_handler(uint32_t argc, char *argv[]);
 static void rtc_handler(uint32_t argc, char *argv[]);
 static void power_handler(uint32_t argc, char *argv[]);
+static void sleep_handler(uint32_t argc, char *argv[]);
+
+#define DEFAULT_RTC_WAKEUP_S   (1)
 
 cli_command_t commands[] = {
     {
@@ -163,6 +165,13 @@ cli_command_t commands[] = {
         .min_arg = 1, .max_arg = 1,
         .help = "Handle low power mode",
         .usage = "<low | normal>"
+    },
+    {
+        .cmd = "sleep",
+        .handler = sleep_handler,
+        .min_arg = 1, .max_arg = 1,
+        .help = "Sleep in low power mode",
+        .usage = "<seconds>"
     },
 };
 
@@ -432,7 +441,9 @@ static void rfm_handler(uint32_t argc, char *argv[])
 
 static void rtc_handler(uint32_t argc, char *argv[])
 {
-    if (argc == 5 && strcmp(argv[1], "set") == 0) {
+    if (argc == 3 && strcmp(argv[1], "wakeup") == 0) {
+        rtcdrv_set_wakeup(atoi(argv[1]));
+    } if (argc == 5 && strcmp(argv[1], "set") == 0) {
         rtcdrv_set_time(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
     } else if (argc == 1) {
         uint8_t h, m, s;
@@ -463,6 +474,27 @@ static void power_handler(uint32_t argc, char *argv[])
     }
 }
 
+static void sleep_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    uint32_t time_s = atoi(argv[1]);
+    rtcdrv_set_wakeup(time_s);
+    /** Sleep peripherals */
+    systick_deinit();
+    rfm69_sleep();
+    tmp102_sleep();
+    /** @todo: Tristate UART pins */
+    /** @todo: Tristate SPI pins */
+    /** @todo: Tristate I2C pins */
+
+    hw_stop_mode();
+    /** Yawn */
+    rtcdrv_set_wakeup(DEFAULT_RTC_WAKEUP_S);
+
+    /** Wake peripherals */
+    systick_init();
+    tmp102_wakeup();
+}
 
 static void blinken_halt(uint32_t blink_count)
 {
@@ -549,9 +581,10 @@ int main(void)
 
     ringbuf_init(&rx_buf, (uint8_t*) rx_buffer, sizeof(rx_buffer));
     hw_init(&rx_buf);
+    /** @todo: utilize pwr_enable_power_voltage_detect(...) */
 
     rtcdrv_init();
-    rtcdrv_set_wakeup(1);
+    rtcdrv_set_wakeup(DEFAULT_RTC_WAKEUP_S);
 
     g_past.blocks[0] = (uint32_t) &past_start;
     g_past.blocks[1] = (uint32_t) &past_start + (uint32_t) &past_block_size;
@@ -602,11 +635,8 @@ int main(void)
             }
         }
         if (low_power) {
+            hw_stop_mode();
             dbg_printf(".");
-            /** @todo: check if this is the right way to do it */
-            PWR_CR |= PWR_CR_LPSDSR;
-            pwr_set_stop_mode();
-            __WFI();
         }
     }
     return 0;

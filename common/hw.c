@@ -33,6 +33,7 @@
 #include <i2c.h>
 #include <spi.h>
 #include <flash.h>
+#include <libopencmsis/core_cm3.h>
 #include "dbg_printf.h"
 #include "tick.h"
 #include "sw_i2c.h"
@@ -51,6 +52,19 @@ static void lse_init(void);
 //static void button_irq_init(void);
 
 static ringbuf_t *rx_buf;
+
+
+/** As of libopencm3 #1155c056, these are missing from pwr_common_v1.h */
+
+/** FWU: Fast wakeup */
+#ifndef PWR_CR_FWU
+ #define PWR_CR_FWU          (1 << 10)
+#endif // PWR_CR_FWU
+
+/** ULP: Ultra-low-power mode */
+#ifndef PWR_CR_ULP
+ #define PWR_CR_ULP          (1 << 9)
+#endif // PWR_CR_ULP
 
 
 /**
@@ -473,4 +487,21 @@ static void lse_init(void)
     } else {
         dbg_printf("LSE failed to start! (drive strength %d)\n", (RCC_CSR >> RCC_CSR_LSEDRV_SHIFT) & RCC_CSR_LSEDRV_MASK);
     }
+}
+
+/**
+ * @brief      Enter low stop mode and wait for interrupt
+ */
+void hw_stop_mode(void)
+{
+    /** @todo: check if this is the right way to do it */
+
+    /** 6.4.1: If ULP=1 and FWU = 0: Exiting from low-power mode occurs only
+     * when the VREFINT is ready */
+    PWR_CR &= ~PWR_CR_FWU;
+    PWR_CR |= ~PWR_CR_ULP;
+
+    PWR_CR |= PWR_CR_LPSDSR;
+    pwr_set_stop_mode();
+    __WFI();
 }

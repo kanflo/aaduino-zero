@@ -103,4 +103,9 @@ uint16_t vcc_measure(void);
   */
 void adc_disable(void);
 
+/**
+ * @brief      Enter stop power mode and wait for interrupt
+ */
+void hw_stop_mode(void);
+
 #endif // __HW_H__
