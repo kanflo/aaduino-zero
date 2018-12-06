@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-#include <stdio.h>
+#include <rtc.h>
 #include <nvic.h>
 #include <rcc.h>
 #include <rtc.h>
@@ -32,7 +32,16 @@
 #include "rtcdrv.h"
 
 
-static uint32_t rtc_counter = 0;
+static uint32_t rtc_wakeup_counter = 0;
+
+/** As of libopencm3 #1155c056, these are missing from rtc_common_l1f024.h  */
+#ifndef RTC_PM_SHIFT
+ #define RTC_PM_SHIFT (22)
+#endif // RTC_PM_SHIFT
+
+#ifndef RTC_PM_MASK
+ #define RTC_PM_MASK (1)
+#endif // RTC_PM_MASK
 
 
 void rtc_isr(void)
@@ -41,23 +50,19 @@ void rtc_isr(void)
     rtc_clear_wakeup_flag();
 //    PWR_CR |= PWR_CR_CWUF;
     exti_reset_request(EXTI20);
-    rtc_counter++;
+    rtc_wakeup_counter++;
 }
 
 /**
-  * @brief Initialize the ring buffer
-  * @param ring pointer to ring buffer
-  * @param buf buffer to store ring buffer data in
-  * @param size size of buffer
-  * @retval none
-  */
+ * @brief      Initialize the RTC driver
+ */
 void rtcdrv_init(void)
 {
 
-    /** . Enable the power interface clock by setting the PWREN bits in the RCC_APB1ENR register. */
+    /** 1. Enable the power interface clock */
     RCC_APB1ENR |= RCC_APB1ENR_PWREN;
 
-    /** 2. Set the DBP bit in the PWR_CR register (see Section 6.4.1). */
+    /** 2. Set the DBP bit in the PWR_CR register (see Section 6.4.1 of RM0376). */
     PWR_CSR |= PWR_CR_DBP;
 
     rtc_unlock();
@@ -67,11 +72,11 @@ void rtcdrv_init(void)
     RCC_CR &= ~(RCC_CR_RTCPRE_MASK << RCC_CR_RTCPRE_SHIFT);
     RCC_CR |= RCC_CR_RTCPRE_DIV2 << RCC_CR_RTCPRE_SHIFT;
 
-    /** RM0376  7.3.21 p. 215 */
+    /** RM0376 7.3.21 p. 215 */
     RCC_CSR &= ~(RCC_CSR_RTCSEL_MASK << RCC_CSR_RTCSEL_SHIFT);
     RCC_CSR |= RCC_CSR_RTCSEL_LSE << RCC_CSR_RTCSEL_SHIFT;
 
-    /**4 . Enable the RTC clock by programming the RTCEN bit in the RCC_CSR register. */
+    /** 4. Enable the RTC clock by programming the RTCEN bit in the RCC_CSR register. */
     RCC_CSR |= RCC_CSR_RTCEN;
 
     RTC_ISR |= RTC_ISR_INIT;
@@ -93,6 +98,11 @@ void rtcdrv_init(void)
     PWR_CSR &= ~PWR_CR_DBP;
 }
 
+/**
+ * @brief      Set and start auto wakeup period of the RTC timer
+ *
+ * @param[in]  period_s  The sleep period in seconds
+ */
 void rtcdrv_set_wakeup(uint16_t period_s)
 {
     exti_enable_request(EXTI20);
@@ -102,38 +112,76 @@ void rtcdrv_set_wakeup(uint16_t period_s)
     nvic_set_priority(NVIC_RTC_IRQ, 1);
 
     rtc_unlock();
-#if 1
     rtc_set_wakeup_time(period_s - 1, RTC_CR_WUCLKSEL_SPRE);
     RTC_CR |= RTC_CR_WUTIE;
-    /** Without this the code works following a cold start but not a warm start :-/ */
+    /** Without this the code works following a cold start but not a warm start */
     rtc_clear_wakeup_flag();
-#else
-    RTC_CR &= ~RTC_CR_WUTE;
-    while(!(RTC_ISR & RTC_ISR_WUTWF)) ;
-
-    RTC_ISR |= RTC_ISR_WUTF /*WUTWF*/; //has to be set before writing to WUTR (manual 22.7.6)
-
-#if 1
-    /** Enable wakeup every 60s */
-    RTC_WUTR = 1;
-//    RTC_WUTR = 59;
-    RTC_CR = RTC_CR_WUTIE | RTC_CR_WUTE | RTC_CR_WUCLKSEL_SPRE;
-#else
-    /** 0xffff is 32 seconds @ RTC_DIV16 */
-//    RTC_WUTR = 0xffff;
-//    RTC_CR = RTC_CR_WUTIE | RTC_CR_WUTE | RTC_CR_WUCLKSEL_RTC_DIV16; // enable wakeup function and interrupt, RTC/2 clock
-#endif
-
-    RTC_ISR &= ~RTC_ISR_INIT; //start the RTC (clear INIT bit)
-
-    /** Without this the code works following a cold start but not a warm start :-/ */
-    rtc_clear_wakeup_flag();
-#endif
     rtc_lock();
 }
 
-uint32_t rtcdrv_get_counter(void)
+/**
+ * @brief      Get the wakeup counter
+ *
+ * @return     Number of wakeups of the RTC driver
+ */
+uint32_t rtcdrv_get_wakeup_counter(void)
 {
-    return rtc_counter;
+    return rtc_wakeup_counter;
 }
 
+/**
+ * @brief      Set RTC driver time, 24 hour format (sorry Yanks ;)
+ *
+ * @param[in]  h          hours
+ * @param[in]  m          seconds
+ * @param[in]  s          seconds
+ */
+void rtcdrv_set_time(uint8_t h, uint8_t m, uint8_t s)
+{
+    /** According to 26.4.7 */
+    rtc_unlock();
+    /** Enter init mode, stop RTC */
+    RTC_ISR |= RTC_ISR_INIT;
+    while(!(RTC_ISR & RTC_ISR_INITF)) ;
+    /** @todo: implement rtcdrv_set_date */
+    RTC_DR = 0;
+    RTC_TR =
+        ((h / 10) & RTC_TR_HT_MASK) << RTC_TR_HT_SHIFT |
+        ((h % 10) & RTC_TR_HU_MASK) << RTC_TR_HU_SHIFT |
+        ((m / 10) & RTC_TR_MNT_MASK) << RTC_TR_MNT_SHIFT |
+        ((m % 10) & RTC_TR_MNU_MASK) << RTC_TR_MNU_SHIFT |
+        ((s / 10) & RTC_TR_ST_MASK) << RTC_TR_ST_SHIFT |
+        ((s % 10) & RTC_TR_SU_MASK) << RTC_TR_SU_SHIFT;
+
+    /** Set 24 hour format */
+    RTC_CR |= RTC_CR_FMT;
+    /** Exit init mode */
+    RTC_ISR &= ~RTC_ISR_INIT;
+    rtc_lock();
+}
+
+/**
+ * @brief      Get current time from RTC driver
+ *
+ * @param      h     hour
+ * @param      m     minute
+ * @param      s     seconds
+ * @param      pm    am (false) pm (true), may be null
+ *
+ */
+void rtcdrv_get_time(uint8_t *h, uint8_t *m, uint8_t *s, bool *pm)
+{
+    uint32_t tr = RTC_TR;
+    uint32_t ht = (tr >> RTC_TR_HT_SHIFT) & RTC_TR_HT_MASK;
+    uint32_t hu = (tr >> RTC_TR_HU_SHIFT) & RTC_TR_HU_MASK;
+    uint32_t mt = (tr >> RTC_TR_MNT_SHIFT) & RTC_TR_MNT_MASK;
+    uint32_t mu = (tr >> RTC_TR_MNU_SHIFT) & RTC_TR_MNU_MASK;
+    uint32_t st = (tr >> RTC_TR_ST_SHIFT) & RTC_TR_ST_MASK;
+    uint32_t su = (tr >> RTC_TR_SU_SHIFT) & RTC_TR_SU_MASK;
+    *h = 10 * ht + hu;
+    *m = 10 * mt + mu;
+    *s = 10 * st + su;
+    if (pm) {
+        *pm = (tr >> RTC_PM_SHIFT) & RTC_PM_MASK;
+    }
+}

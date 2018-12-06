@@ -30,7 +30,6 @@
 #include <flash.h>
 #include <gpio.h>
 #include <pwr.h>
-#include <rtc.h>
 #include <libopencmsis/core_cm3.h>
 #include "rtcdrv.h"
 #include "cli.h"
@@ -151,9 +150,9 @@ cli_command_t commands[] = {
     {
         .cmd = "rtc",
         .handler = rtc_handler,
-        .min_arg = 0, .max_arg = 0,
+        .min_arg = 0, .max_arg = 5,
         .help = "Handle RTC",
-        .usage = ""
+        .usage = "[set <h> <m> <s>]"
     },
     {
         .cmd = "power",
@@ -426,23 +425,19 @@ static void rfm_handler(uint32_t argc, char *argv[])
 
 static void rtc_handler(uint32_t argc, char *argv[])
 {
-    (void) argc;
-    (void) argv;
-    //uint32_t ssr = RTC_SSR;
-    uint32_t tr = RTC_TR;
-    //uint32_t dr = RTC_DR;
-
-    uint32_t ht = (tr >> RTC_TR_HT_SHIFT) & RTC_TR_HT_MASK;
-    uint32_t hu = (tr >> RTC_TR_HU_SHIFT) & RTC_TR_HU_MASK;
-    uint32_t mt = (tr >> RTC_TR_MNT_SHIFT) & RTC_TR_MNT_MASK;
-    uint32_t mu = (tr >> RTC_TR_MNU_SHIFT) & RTC_TR_MNU_MASK;
-    uint32_t st = (tr >> RTC_TR_ST_SHIFT) & RTC_TR_ST_MASK;
-    uint32_t su = (tr >> RTC_TR_SU_SHIFT) & RTC_TR_SU_MASK;
-
-    dbg_printf("Time: %d%d:", ht, hu);
-    dbg_printf("%d%d:", mt, mu);
-    dbg_printf("%d%d\n", st, su);
-    dbg_printf("RTC counter: %d\n", rtcdrv_get_counter());
+    if (argc == 5 && strcmp(argv[1], "set") == 0) {
+        rtcdrv_set_time(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
+    } else if (argc == 1) {
+        uint8_t h, m, s;
+        rtcdrv_get_time(&h, &m, &s, 0);
+        /** @todo: find out why %02d does not work */
+        dbg_printf("Time: %d%d:", h/10, h%10);
+        dbg_printf("%d%d:", m/10, m%10);
+        dbg_printf("%d%d\n", s/10, s%10);
+        dbg_printf("RTC counter: %d\n", rtcdrv_get_wakeup_counter());
+    } else {
+        dbg_printf("Error: illegal RTC command\n");
+    }
 }
 
 static void power_handler(uint32_t argc, char *argv[])

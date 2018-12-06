@@ -28,8 +28,43 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/**
+ * @brief      Initialize the RTC driver
+ */
 void rtcdrv_init(void);
+
+/**
+ * @brief      Set and start auto wakeup period of the RTC timer
+ *
+ * @param[in]  period_s  The sleep period in seconds
+ */
 void rtcdrv_set_wakeup(uint16_t period_s);
-uint32_t rtcdrv_get_counter(void);
+
+/**
+ * @brief      Get the wakeup counter
+ *
+ * @return     Number of wakeups of the RTC driver
+ */
+uint32_t rtcdrv_get_wakeup_counter(void);
+
+/**
+ * @brief      Set RTC driver time, 24 hour format (sorry Yanks ;)
+ *
+ * @param[in]  h          hours
+ * @param[in]  m          seconds
+ * @param[in]  s          seconds
+ */
+void rtcdrv_set_time(uint8_t h, uint8_t m, uint8_t s);
+
+/**
+ * @brief      Get current time from RTC driver
+ *
+ * @param      h     hour
+ * @param      m     minute
+ * @param      s     seconds
+ * @param      pm    am (false) pm (true), may be null
+ *
+ */
+void rtcdrv_get_time(uint8_t *h, uint8_t *m, uint8_t *s, bool *pm);
 
 #endif // __RTCDRV_H__
