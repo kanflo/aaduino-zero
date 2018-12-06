@@ -53,6 +53,9 @@ static past_t g_past;
 /** Linker symbols */
 extern long past_start, past_block_size;
 
+/** RFM69 init done */
+static bool rfm69_inited = false;
+
 
 static void blinken_halt(uint32_t blink_count);
 static void dump_mem(uint32_t address, uint32_t length);
@@ -161,7 +164,6 @@ cli_command_t commands[] = {
         .help = "Handle low power mode",
         .usage = "<low | normal>"
     },
-    // TODO: More commands to be added
 };
 
 
@@ -393,6 +395,7 @@ static void rfm_handler(uint32_t argc, char *argv[])
     } else if (argc == 2) {
         if (strcmp(cmd, "init") == 0) {
             rfm_init();
+            rfm69_inited = true;
         }
     } else if (argc == 3) {
         if (strcmp(cmd, "id") == 0) {
@@ -414,6 +417,10 @@ static void rfm_handler(uint32_t argc, char *argv[])
         }
     } else if (argc == 4) {
         if (strcmp(cmd, "tx") == 0) {
+            if (!rfm69_inited) {
+                rfm_init();
+                rfm69_inited = true;
+            }
             rfm_tx(atoi(argv[2]), argv[3]);
         } else {
             dbg_printf("ERROR: Illegal command\n");
