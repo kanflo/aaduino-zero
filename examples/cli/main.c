@@ -78,6 +78,7 @@ static void rfm_handler(uint32_t argc, char *argv[]);
 static void rtc_handler(uint32_t argc, char *argv[]);
 static void power_handler(uint32_t argc, char *argv[]);
 static void sleep_handler(uint32_t argc, char *argv[]);
+static void vcc_handler(uint32_t argc, char *argv[]);
 
 
 
@@ -174,6 +175,13 @@ cli_command_t commands[] = {
         .min_arg = 1, .max_arg = 1,
         .help = "Sleep in low power mode",
         .usage = "<seconds>"
+    },
+    {
+        .cmd = "vcc",
+        .handler = vcc_handler,
+        .min_arg = 0, .max_arg = 0,
+        .help = "Measure VCC",
+        .usage = ""
     },
 };
 
@@ -498,6 +506,15 @@ static void sleep_handler(uint32_t argc, char *argv[])
     tmp102_wakeup();
 }
 
+static void vcc_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    uint16_t vcc = vcc_measure();
+    dbg_printf("%d.%02dV\n", vcc/1000, (vcc%1000)/10);
+}
+
+
 static void blinken_halt(uint32_t blink_count)
 {
     delay_ms(1);
@@ -613,6 +630,9 @@ int main(void)
         uint32_t t = 1000 * tmp102_readTempC();
         dbg_printf("Temperature is %d.%d°C\n", t/1000, (t%1000)/100);
     }
+
+    uint16_t vcc = vcc_measure();
+    dbg_printf("VCC is %d.%02dV\n", vcc/1000, (vcc%1000)/10);
 
     dbg_printf("Try 'help <return>' for, well, help.\n");
     dbg_printf("%% ");
