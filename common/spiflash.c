@@ -26,6 +26,12 @@
 #include "dbg_printf.h"
 #include "spiflash.h"
 
+#ifdef CONFIG_SPIFLASH_DEBUG
+ #define flash_printf(...) dbg_printf(...)
+#else // CONFIG_SPIFLASH_DEBUG
+ #define dbg_printf(...)
+#endif // CONFIG_SPIFLASH_DEBUG
+
 #define CMD_GETID            (0x9f)
 
 #define CMD_PROGRAM_ERASE_BUFFER1  (0x83)
@@ -60,7 +66,7 @@ typedef struct {
 static void cs_assert(bool assert);
 static uint8_t read_status(void);
 static int8_t check_flash(uint8_t manufacturer, uint16_t jedec_id);
-static void flash_cmd(int8_t cmd);
+//static void flash_cmd(int8_t cmd);
 static void set_page_size_256(void);
 
 // Set when probing
@@ -125,11 +131,10 @@ bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
         int32_t remain = length;
         dbg_printf("Writing %u bytes to 0x%08x\n", length, address);
         while(remain > 0) {
-            uint8_t page_idx = address / flashes[flash_idx].page_size;
             uint32_t chunk_size = (((uint32_t) remain) > flashes[flash_idx].page_size) ? (flashes[flash_idx].page_size) : ((uint32_t) remain);
 
             cs_assert(true);
-            dbg_printf("  %u bytes at 0x%08x (page %d)\n", chunk_size, address, page_idx);
+            dbg_printf("  %u bytes at 0x%08x (page %d)\n", chunk_size, address, address / flashes[flash_idx].page_size);
             (void) spi_xfer(SPI1, CMD_WRITE_BUFFER1);
 
             (void) spi_xfer(SPI1, (address >> 16) & 0xff);
@@ -260,12 +265,14 @@ static uint8_t read_status(void)
     return status;
 }
 
+#if 0
 static void flash_cmd(int8_t cmd)
 {
     cs_assert(true);
     (void) spi_xfer(SPI1, (uint8_t) cmd);
     cs_assert(false);
 }
+#endif
 
 static void set_page_size_256(void)
 {
@@ -278,7 +285,7 @@ static void set_page_size_256(void)
         (void) spi_xfer(SPI1, 0xa6);
         cs_assert(false);
         while(!(read_status() & STATUS_BUSY)) {
-            delay_ms(1); // TODO: Handle timeout
+            //delay_ms(1); // TODO: Handle timeout
         }
     }
 }
