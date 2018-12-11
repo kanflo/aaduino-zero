@@ -79,6 +79,8 @@ static void rtc_handler(uint32_t argc, char *argv[]);
 static void power_handler(uint32_t argc, char *argv[]);
 static void sleep_handler(uint32_t argc, char *argv[]);
 
+
+
 #define DEFAULT_RTC_WAKEUP_S   (1)
 
 cli_command_t commands[] = {
@@ -359,7 +361,7 @@ static void rfm_init(void)
     }
 }
 
-static void rfm_set_uint32(parameter_id_t id, uint32_t value)
+static void past_set_uint32(parameter_id_t id, uint32_t value)
 {
     dbg_printf("%d:%d\n", id, value);
     if (past_write_unit(&g_past, id, (void*)&value, sizeof(value))) {
@@ -369,7 +371,7 @@ static void rfm_set_uint32(parameter_id_t id, uint32_t value)
     }
 }
 
-static void rfm_set_str(parameter_id_t id, char *str, uint32_t len)
+static void past_set_str(parameter_id_t id, char *str, uint32_t len)
 {
    if (past_write_unit(&g_past, id, (void*)str, len)) {
         dbg_printf("OK\n");
@@ -408,18 +410,18 @@ static void rfm_handler(uint32_t argc, char *argv[])
         }
     } else if (argc == 3) {
         if (strcmp(cmd, "id") == 0) {
-            rfm_set_uint32(past_rfm_node_id, atoi(argv[2]));
+            past_set_uint32(past_rfm_node_id, atoi(argv[2]));
         } else if (strcmp(cmd, "net") == 0) {
-            rfm_set_uint32(past_rfm_net_id, atoi(argv[2]));
+            past_set_uint32(past_rfm_net_id, atoi(argv[2]));
         } else if (strcmp(cmd, "gw") == 0) {
-            rfm_set_uint32(past_rfm_gateway_id, atoi(argv[2]));
+            past_set_uint32(past_rfm_gateway_id, atoi(argv[2]));
         } else if (strcmp(cmd, "pwr") == 0) {
-            rfm_set_uint32(past_rfm_max_power, atoi(argv[2]));
+            past_set_uint32(past_rfm_max_power, atoi(argv[2]));
         } else if (strcmp(cmd, "key") == 0) {
             if (strlen(argv[2]) != 16) {
                 dbg_printf("ERROR: key must be 16 bytes\n");
             } else {
-                rfm_set_str(past_rfm_key, argv[2], 16);
+                past_set_str(past_rfm_key, argv[2], 16);
             }
         } else {
             dbg_printf("ERROR: Illegal command\n");
