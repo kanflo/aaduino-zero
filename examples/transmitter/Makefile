@@ -2,7 +2,7 @@ BINARY = main
 
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
-CFLAGS = -I. -I$(COMMON)
+CFLAGS = -I. -I$(COMMON) -DCONFIG_RAM_VECTORS
 LDSCRIPT = $(COMMON)/stm32l052_app.ld
 
 OBJS = \

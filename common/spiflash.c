@@ -26,6 +26,9 @@
 #include "dbg_printf.h"
 #include "spiflash.h"
 
+
+/** @todo: this module is very much work in progress */
+
 #ifdef CONFIG_SPIFLASH_DEBUG
  #define flash_printf(...) dbg_printf(...)
 #else // CONFIG_SPIFLASH_DEBUG

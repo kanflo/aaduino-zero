@@ -40,6 +40,15 @@
 #include "hw.h"
 #include "spi_driver.h"
 
+#ifdef CONFIG_RAM_VECTORS
+#include <scb.h>
+/** Linker file symbols */
+extern uint32_t *_ram_vect_start;
+extern uint32_t *_ram_vect_end;
+extern uint32_t *vector_table;
+static void copy_vectors(void);
+#endif // CONFIG_RAM_VECTORS
+
 static void tim2_init(void);
 static void clock_init(void);
 static void usart_init(void);
@@ -74,6 +83,9 @@ static ringbuf_t *rx_buf;
 void hw_init(ringbuf_t *usart_rx_buf)
 {
     rx_buf = usart_rx_buf;
+#ifdef CONFIG_RAM_VECTORS
+    copy_vectors();
+#endif // CONFIG_RAM_VECTORS
     clock_init();
 #ifndef CONFIG_LOW_POWER_MODE
     systick_init();
@@ -89,8 +101,25 @@ void hw_init(ringbuf_t *usart_rx_buf)
 }
 
 /**
+  * @brief Relocate the vector table to the internal SRAM
+  * @retval None
+  */
+#ifdef CONFIG_RAM_VECTORS
+static void copy_vectors(void)
+{
+    uint32_t v_size = (uint32_t) &_ram_vect_end - (uint32_t) &_ram_vect_start;
+    volatile uint32_t *v_rom = (uint32_t*) &vector_table;
+    volatile uint32_t *v_ram = (uint32_t*) &_ram_vect_start;
+    for(uint32_t i = 0; i < v_size/4; i++) {
+        v_ram[i] = v_rom[i];
+    }
+    SCB_VTOR = (uint32_t) &_ram_vect_start;
+}
+#endif // CONFIG_RAM_VECTORS
+
+/**
   * @brief Initialize the hardware
-  * @param on Turn on if, wll, on
+  * @param on LED on or off
   * @retval None
   */
 void hw_set_led(bool on)

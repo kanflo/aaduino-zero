@@ -3,7 +3,7 @@ BINARY = main
 LOWPOWER := 0
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
-CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE
+CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE -DCONFIG_RAM_VECTORS
 
 ifeq ($(LOWPOWER),1)
   # Run in low power mode (experimental!)

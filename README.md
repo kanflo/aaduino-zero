@@ -31,7 +31,7 @@ It also sends an ackmowledge to the transmitter to let it know the report was re
 * Reverse polarity protection
 * 1x digital/analog I/O port
 * UART port on 0.1” header
-* Pre-programmed with serial boot loader (this is a todo)
+* Pre-programmed with a [serial boot loader](https://github.com/kanflo/aaduino-zero/tree/master/zeroboot) capable of handeling firmware upgrades via radio or the UART.
 * Minimum supply voltage, 1.8V
 * Maximum supply voltage, 3.6V
 * Minimum power consumption is TBD
