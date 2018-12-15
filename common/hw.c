@@ -357,6 +357,7 @@ static void usart_init(void)
 
 void usart1_isr(void)
 {
+    /** @todo: this code hangs if pasting lots and lots of characters into the terminal */
     if ((USART_CR1(USART1) & USART_CR1_RXNEIE) != 0 &&
         (USART_ISR(USART1) & USART_ISR_RXNE) != 0) {
         uint16_t ch = usart_recv(USART1);
