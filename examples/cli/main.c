@@ -373,7 +373,7 @@ static void rfm_init(void)
         (void) rfm69_setAESEncryption((void*) aesKey, 16);
         rfm69link_setNodeId(*node_id);
         rfm69link_setNetworkId(*network_id);
-        dbg_printf("OK\n");
+        dbg_printf("RFM69 init ok\n");
     }
 }
 
