@@ -150,7 +150,7 @@ static uint32_t past_remaining_size(past_t *past);
 bool past_init(past_t *past)
 {
     bool success = false;
-    if (past) {
+    if (past && past->blocks[0] && past->blocks[1]) {
         /** Check which block is the current one */
         uint32_t magic_1 = eeprom_read32(past->blocks[0]);
         uint32_t magic_2 = eeprom_read32(past->blocks[1]);
