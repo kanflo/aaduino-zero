@@ -79,6 +79,7 @@ static void rtc_handler(uint32_t argc, char *argv[]);
 static void power_handler(uint32_t argc, char *argv[]);
 static void sleep_handler(uint32_t argc, char *argv[]);
 static void vcc_handler(uint32_t argc, char *argv[]);
+static void spiflash_handler(uint32_t argc, char *argv[]);
 
 
 
@@ -181,6 +182,13 @@ cli_command_t commands[] = {
         .handler = vcc_handler,
         .min_arg = 0, .max_arg = 0,
         .help = "Measure VCC",
+        .usage = ""
+    },
+    {
+        .cmd = "spiflash",
+        .handler = spiflash_handler,
+        .min_arg = 0, .max_arg = 3,
+        .help = "Test SPI flash",
         .usage = ""
     },
 };
@@ -514,6 +522,124 @@ static void vcc_handler(uint32_t argc, char *argv[])
     dbg_printf("%d.%02dV\n", vcc/1000, (vcc%1000)/10);
 }
 
+static void spiflash_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+
+    static uint8_t write_buf[256];
+    static uint8_t read_buf[256];
+
+    /** Write 00 01 02 03 .. ff to page 0 */
+    /** Write ff fe fd fc .. 00 to page 1 */
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        write_buf[i] = i;
+    }
+    dbg_printf("Writing page 0\n");
+    if (!spiflash_write(0, sizeof(write_buf), (uint8_t*) write_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        write_buf[i] = ~i;
+    }
+    dbg_printf("Writing page 1\n");
+    if (!spiflash_write(256, sizeof(write_buf), (uint8_t*) write_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        write_buf[i] = i;
+    }
+
+    /** Verify writes */
+    memset(read_buf, 0xcd, sizeof(read_buf));
+    dbg_printf("Reading page 0\n");
+    if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        if (write_buf[i] != read_buf[i]) {
+            dbg_printf("Verification failed at %d\n", i);
+        }
+    }
+
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        write_buf[i] = ~i;
+    }
+    memset(read_buf, 0xcd, sizeof(read_buf));
+    dbg_printf("Reading page 1\n");
+    if (!spiflash_read(256, sizeof(read_buf), (uint8_t*) read_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        if (write_buf[i] != read_buf[i]) {
+            dbg_printf("Verification failed at %d\n", i);
+        }
+    }
+
+    /** Test page erase */
+    dbg_printf("Erasing page 0\n");
+    if (!spiflash_erase(0, sizeof(write_buf))) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    for (uint32_t i = 0; i < sizeof(read_buf); i++) {
+        if (read_buf[i] != 0xff) {
+            dbg_printf("Erase failed at %d (%02x)\n", i, read_buf[i]);
+        }
+    }
+
+    dbg_printf("Erasing page 1\n");
+    if (!spiflash_erase(256, sizeof(write_buf))) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    if (!spiflash_read(256, sizeof(read_buf), (uint8_t*) read_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    for (uint32_t i = 0; i < sizeof(read_buf); i++) {
+        if (read_buf[i] != 0xff) {
+            dbg_printf("Erase failed at %d (%02x)\n", i, read_buf[i]);
+        }
+    }
+
+
+    /** Test chip erase, Write data to page 0, erase chip, check page 0 */
+    dbg_printf("Testing chip erase\n");
+
+    for (uint32_t i = 0; i < sizeof(write_buf); i++) {
+        write_buf[i] = i;
+    }
+    if (!spiflash_write(0, sizeof(write_buf), (uint8_t*) write_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    if (!spiflash_chip_erase()) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
+        dbg_printf("Failed at %d\n", __LINE__);
+        return;
+    }
+    for (uint32_t i = 0; i < sizeof(read_buf); i++) {
+        if (read_buf[i] != 0xff) {
+            dbg_printf("Erase failed at %d (%02x)\n", i, read_buf[i]);
+        }
+    }
+
+    dbg_printf("Success!\n");
+}
 
 static void blinken_halt(uint32_t blink_count)
 {

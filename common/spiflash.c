@@ -27,7 +27,6 @@
 #include "spiflash.h"
 
 
-/** @todo: this module is very much work in progress */
 
 #ifdef CONFIG_SPIFLASH_DEBUG
  #define flash_printf(...) dbg_printf(...)
@@ -35,20 +34,18 @@
  #define dbg_printf(...)
 #endif // CONFIG_SPIFLASH_DEBUG
 
-#define CMD_GETID            (0x9f)
-
+#define CMD_GETID                  (0x9f)
+#define CMD_PAGE_ERASE             (0x81) /** 256 bytes */
 #define CMD_PROGRAM_ERASE_BUFFER1  (0x83)
 #define CMD_WRITE_BUFFER1          (0x84)
 #define CMD_READ_STATUS            (0xd7)
 #define CMD_READ_DATA              (0x03)
-
-
-
-//#define CMD_PAGE_PROGRAM     (0x02)
-//#define CMD_READ_DATA_HISPD  (0x0b)
-//#define CMD_ERASE_SECTOR     (0xd8) // 4kb
-//#define CMD_ERASE_SUBSECTOR  (0x20) // 64kb
-//#define CMD_ERASE_CHIP       (0xc7)
+#define CMD_ERASE_SECTOR           (0xd8) /** 4kb */
+#define CMD_ERASE_SUBSECTOR        (0x20) /** 64kb */
+#define CMD_ERASE_CHIP1            (0xc7)
+#define CMD_ERASE_CHIP2            (0x94)
+#define CMD_ERASE_CHIP3            (0x80)
+#define CMD_ERASE_CHIP4            (0x9a)
 
 #define STATUS_BUSY           (1 << 7)
 #define STATUS_COMP           (1 << 6)
@@ -56,6 +53,9 @@
 #define STATUS_PROTECT        (1 << 1)
 #define STATUS_PAGE_SIZE_256  (1 << 0)
 
+/** Flash operation timeouts */
+#define OP_TIMEOUT_MS                (40) /** Woest case is 35ms for block erase */
+#define CHIP_ERASE_TIMEOUT_MS     (20000) /** Yes, 20 seconds */
 
 typedef struct {
     uint8_t manufacturer;
@@ -65,23 +65,26 @@ typedef struct {
     char *description;
 } spi_flash_t;
 
-
 static void cs_assert(bool assert);
 static uint8_t read_status(void);
 static int8_t check_flash(uint8_t manufacturer, uint16_t jedec_id);
-//static void flash_cmd(int8_t cmd);
+static bool wait_completion(uint32_t timeout_ms);
 static void set_page_size_256(void);
 
-// Set when probing
+/** Index of found flash in the flashes array, set when probing */
 static int8_t flash_idx = -1;
 
-// List of supported flashes. Feel free to add the flash of your heart's desire
+/** List of supported flashes */
 static const spi_flash_t flashes[] = {
     { 0x1f, 0x2400, 2048, 256, "Adesto AT45DB041E" },
     { 0, 0, 0, 0, 0 } // End marker
 };
 
-
+/**
+ * @brief      Probe for SPI flash
+ *
+ * @return     true if supported flash was found, false otherwise
+ */
 bool spiflash_probe(void)
 {
     uint8_t info[5]; // 5 for AT45DB041E, others TBD
@@ -98,6 +101,11 @@ bool spiflash_probe(void)
     return flash_idx >= 0;
 }
 
+/**
+ * @brief      Get flash description
+ *
+ * @return     Flash description string
+ */
 const char *spiflash_get_desc(void)
 {
     if (flash_idx >= 0) {
@@ -107,7 +115,15 @@ const char *spiflash_get_desc(void)
     }
 }
 
-
+/**
+ * @brief      Read from serial flash
+ *
+ * @param[in]  address  Address to read from
+ * @param[in]  length   Number of bytes to read
+ * @param      buffer   Buffer to store data in
+ *
+ * @return     true if all went well
+ */
 bool spiflash_read(uint32_t address, uint32_t length, uint8_t *buffer)
 {
     bool success = false;
@@ -127,6 +143,15 @@ bool spiflash_read(uint32_t address, uint32_t length, uint8_t *buffer)
     return success;
 }
 
+/**
+ * @brief      Write data to serial flash, will erase if needed
+ *
+ * @param[in]  address  Address to write from
+ * @param[in]  length   Number of bytes to write
+ * @param      buffer   Buffer holding data
+ *
+ * @return     true if all went well
+ */
 bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
 {
     bool success = false;
@@ -156,21 +181,16 @@ bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
             cs_assert(false);
 
             cs_assert(true);
-            dbg_printf("Writing to page %d\n", page_idx);
+            dbg_printf("Writing to %d\n", address);
             (void) spi_xfer(SPI1, CMD_PROGRAM_ERASE_BUFFER1);
             (void) spi_xfer(SPI1, (address >> 16) & 0xff);
             (void) spi_xfer(SPI1, (address >> 8) & 0xff);
             (void) spi_xfer(SPI1, address & 0xff);
             cs_assert(false);
 
-
-            uint32_t wait_counter = 0;
-            while(!(read_status() & STATUS_BUSY)) {
-                // TODO: Handle timeout
-                wait_counter++;
-                delay_ms(1);
+            if (!wait_completion(OP_TIMEOUT_MS)) {
+                return false;
             }
-            dbg_printf("Duration %dms\n", wait_counter);
             address += flashes[flash_idx].page_size;
             remain -= flashes[flash_idx].page_size;
         }
@@ -179,63 +199,72 @@ bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer)
     return success;
 }
 
+/**
+ * @brief      Erase flash page/pages
+ *
+ * @param[in]  address  The address, must be page aligned
+ * @param[in]  length   The length, must be page aligned
+ *
+ * @return     true if all went well
+ */
 bool spiflash_erase(uint32_t address, uint32_t length)
 {
     bool success = false;
-    (void) address;
-    (void) length;
-#if 0
-    if (flash_idx >= 0) {
-        uint32_t address_aligned = address & ~(SUBSECTOR_SIZE-1);
-        uint32_t end_address = address + length;
-        length += address & ~(SUBSECTOR_SIZE-1);
-        dbg_printf("Erasing %u bytes at 0x%08x\n", length, address_aligned);
-        while (end_address > address_aligned) {
+    uint32_t page_size = flashes[flash_idx].page_size;
+    if (flash_idx >= 0 && !(address % page_size) && !(length % page_size)) {
+        while (length) {
             cs_assert(true);
-            // TODO: Optimise by erasing sectors when possible (~2x erase speed)
-            (void) spi_xfer(SPI1, CMD_ERASE_SUBSECTOR);
-            dbg_printf("  Erasing subsector at 0x%08x\n", address_aligned);
-            (void) spi_xfer(SPI1, address_aligned >> 16);
-            (void) spi_xfer(SPI1, address_aligned >> 8);
-            (void) spi_xfer(SPI1, address_aligned);
+            dbg_printf("Erasing %d\n", address);
+            (void) spi_xfer(SPI1, CMD_PAGE_ERASE);
+            (void) spi_xfer(SPI1, (address >> 16) & 0xff);
+            (void) spi_xfer(SPI1, (address >> 8) & 0xff);
+            (void) spi_xfer(SPI1, 0);
             cs_assert(false);
-            delay_ms(70); // Subsector erase takes 70-150ms
-            while(read_status() & STATUS_WIP) {
-            // TODO: Handle timeout
-                delay_ms(5);
+
+            if (!wait_completion(OP_TIMEOUT_MS)) {
+                return false;
             }
-            dbg_printf("    Done\n");
-            address_aligned += SUBSECTOR_SIZE;
+
+            address += page_size;
+            length -= page_size;
         }
         success = true;
     }
-#endif
     return success;
 }
 
+/**
+ * @brief      Erase complete chip
+ *
+ * @return     true if all went well
+ */
 bool spiflash_chip_erase(void)
 {
     bool success = false;
-#if 0
     if (flash_idx >= 0) {
         dbg_printf("Erasing chip\n");
-        uint8_t status;
-        flash_cmd(CMD_ERASE_CHIP);
-        while(1) {
-            // TODO: Handle timeout
-            status = read_status();
-            if (!(status & STATUS_WIP)) {
-                dbg_printf("Erase done\n");
-                return true;
-            }
-            delay_ms(25);
+        cs_assert(true);
+        (void) spi_xfer(SPI1, CMD_ERASE_CHIP1);
+        (void) spi_xfer(SPI1, CMD_ERASE_CHIP2);
+        (void) spi_xfer(SPI1, CMD_ERASE_CHIP3);
+        (void) spi_xfer(SPI1, CMD_ERASE_CHIP4);
+        cs_assert(false);
+
+        if (!wait_completion(CHIP_ERASE_TIMEOUT_MS)) {
+            return false;
         }
+
         success = true;
     }
-#endif
+
     return success;
 }
 
+/**
+ * @brief      Assert or deassert CS
+ *
+ * @param[in]  assert  ...
+ */
 static void cs_assert(bool assert)
 {
     if (assert) {
@@ -245,6 +274,14 @@ static void cs_assert(bool assert)
     }
 }
 
+/**
+ * @brief      Check if found flash is supported
+ *
+ * @param[in]  manufacturer  The manufacturer
+ * @param[in]  jedec_id      The jedec identifier
+ *
+ * @return     Index in array of supported flashes or -1 if unsupported
+ */
 static int8_t check_flash(uint8_t manufacturer, uint16_t jedec_id)
 {
     uint8_t rover = 0;
@@ -258,6 +295,11 @@ static int8_t check_flash(uint8_t manufacturer, uint16_t jedec_id)
     return -1;
 }
 
+/**
+ * @brief      Read status from flash
+ *
+ * @return     well, status
+ */
 static uint8_t read_status(void)
 {
     uint8_t status = 0;
@@ -268,15 +310,9 @@ static uint8_t read_status(void)
     return status;
 }
 
-#if 0
-static void flash_cmd(int8_t cmd)
-{
-    cs_assert(true);
-    (void) spi_xfer(SPI1, (uint8_t) cmd);
-    cs_assert(false);
-}
-#endif
-
+/**
+ * @brief      Switch to 256 byte page addressing
+ */
 static void set_page_size_256(void)
 {
     if (!(read_status() & STATUS_PAGE_SIZE_256)) {
@@ -287,8 +323,25 @@ static void set_page_size_256(void)
         (void) spi_xfer(SPI1, 0x80);
         (void) spi_xfer(SPI1, 0xa6);
         cs_assert(false);
-        while(!(read_status() & STATUS_BUSY)) {
-            //delay_ms(1); // TODO: Handle timeout
-        }
+
     }
+}
+
+/**
+ * @brief      Await flash operation completion
+ *
+ * @return     true if success, false if timeoit
+ */
+static bool wait_completion(uint32_t timeout_ms)
+{
+    uint32_t wait_counter = 0;
+    while(!(read_status() & STATUS_BUSY)) {
+        if (++wait_counter >= timeout_ms) {
+            dbg_printf("Timeout in flash operation\n");
+            return false;
+        }
+        delay_ms(1);
+    }
+    dbg_printf("Duration %dms\n", wait_counter);
+    return true;
 }

@@ -33,12 +33,58 @@
 #include "hw.h"
 #include "tick.h"
 
+/**
+ * @brief      Probe for SPI flash
+ *
+ * @return     true if supported flash was found, false otherwise
+ */
 bool spiflash_probe(void);
+
+/**
+ * @brief      Get flash description
+ *
+ * @return     Flash description string
+ */
+const char *spiflash_get_desc(void);
+
+/**
+ * @brief      Read from serial flash
+ *
+ * @param[in]  address  Address to read from
+ * @param[in]  length   Number of bytes to read
+ * @param      buffer   Buffer to store data in
+ *
+ * @return     true if all went well
+ */
 bool spiflash_read(uint32_t address, uint32_t length, uint8_t *buffer);
+
+/**
+ * @brief      Write data to serial flash, will erase if needed
+ *
+ * @param[in]  address  Address to write from
+ * @param[in]  length   Number of bytes to write
+ * @param      buffer   Buffer holding data
+ *
+ * @return     true if all went well
+ */
 bool spiflash_write(uint32_t address, uint32_t length, uint8_t *buffer);
+
+/**
+ * @brief      Erase flash page/pages
+ *
+ * @param[in]  address  The address, must be page aligned
+ * @param[in]  length   The length, must be page aligned
+ *
+ * @return     true if all went well
+ */
 bool spiflash_erase(uint32_t address, uint32_t length);
+
+/**
+ * @brief      Erase complete chip
+ *
+ * @return     true if all went well
+ */
 bool spiflash_chip_erase(void);
 
-const char *spiflash_get_desc(void);
 
 #endif // __SPIFLASH_H__
