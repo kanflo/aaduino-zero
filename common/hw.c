@@ -216,7 +216,7 @@ static void clock_init(void)
     flash_prefetch_enable();
     flash_set_ws(0);
 
-#warning "*** Add mode for 4MHz HSI16 mode ***"
+    /** @todo: Add mode for 4MHz HSI16 mode */
 
     /* Set up the PLL */
     rcc_set_pll_multiplier(RCC_CFGR_PLLMUL_MUL4);
