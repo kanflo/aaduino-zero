@@ -41,6 +41,7 @@
 #include "spiflash.h"
 #include "past.h"
 #include "pastunits.h"
+#include "libopencm3-additions.h"
 
 /** Running in low power mode is experimental and will make attaching via the
  * BMP fail which can be fixed by returning to normal power mode.
@@ -80,6 +81,7 @@ static void power_handler(uint32_t argc, char *argv[]);
 static void sleep_handler(uint32_t argc, char *argv[]);
 static void vcc_handler(uint32_t argc, char *argv[]);
 static void spiflash_handler(uint32_t argc, char *argv[]);
+static void flash_handler(uint32_t argc, char *argv[]);
 
 
 
@@ -189,6 +191,13 @@ cli_command_t commands[] = {
         .handler = spiflash_handler,
         .min_arg = 0, .max_arg = 3,
         .help = "Test SPI flash",
+        .usage = ""
+    },
+    {
+        .cmd = "flash",
+        .handler = flash_handler,
+        .min_arg = 0, .max_arg = 3,
+        .help = "Test internal flash",
         .usage = ""
     },
 };
@@ -641,6 +650,44 @@ static void spiflash_handler(uint32_t argc, char *argv[])
     dbg_printf("Success!\n");
 }
 
+static void flash_handler(uint32_t argc, char *argv[])
+{
+    (void) argc;
+    (void) argv;
+    dbg_printf("STM32L0 Flash Test\n");
+    uint32_t addr = 0x08007c00; /** Last kb */
+    uint32_t page_size = 128;
+    volatile uint8_t *p = (uint8_t*) addr;
+
+    dbg_printf("Testing write\n");
+    flash_unlock();
+    for (uint32_t i = 0; i < page_size; i+=4) {
+        flash_program_word(addr + i, 0xffffffff);
+    }
+    flash_lock();
+    for (uint32_t i = 0; i < page_size; i++) {
+        if (p[i] != 0xff) {
+            dbg_printf(" Write failed at %d: 0x%02x\n", i, p[i]);
+            dump_mem(addr, page_size);
+            break;
+        }
+    }
+
+    dbg_printf("Testing erase\n");
+    flash_unlock();
+    flash_erase_page(addr);
+    flash_lock();
+    for (uint32_t i = 0; i < page_size; i++) {
+        if (p[i] != 0) {
+            dbg_printf(" Erase failed at %d: 0x%02x\n", i, p[i]);
+            dump_mem(addr, page_size);
+            break;
+        }
+    }
+
+    dbg_printf("OK\n");
+}
+
 static void blinken_halt(uint32_t blink_count)
 {
     delay_ms(1);
@@ -670,49 +717,6 @@ static void dump_mem(uint32_t address, uint32_t length)
     }
     dbg_printf("\n");
 }
-
-#if 0
-static void flash_test(void)
-{
-    dbg_printf("\n\n *** flash test ***\n");
-
-    dump_mem(0x08007000, 16);
-    flash_unlock();
-    for (int i = 0; i < 1024; i+=4) {
-        flash_program_word(0x08007000 + i, 0xffffffff);
-    }
-    flash_lock();
-
-    dump_mem(0x08007000, 16);
-
-    dbg_printf("\n>>> Erasing 0x08007000\n");
-    flash_unlock();
-    flash_erase_page(0x08007000);
-    flash_lock();
-    dump_mem(0x08007000, 16);
-
-    dbg_printf("\n>>> Programming 0x08007000\n");
-    flash_unlock();
-    flash_program_word(0x08007000, 0x000000ff);
-    flash_lock();
-    dump_mem(0x08007000, 16);
-
-    dbg_printf("\n>>> Programming 0x08007000\n");
-    flash_unlock();
-    flash_program_word(0x08007000, 0xff000000);
-    flash_lock();
-    dump_mem(0x08007000, 16);
-
-    dbg_printf("\n>>> Programming 0x08007000\n");
-    flash_unlock();
-    flash_program_word(0x08007000, 0x00000000);
-    flash_lock();
-    dump_mem(0x08007000, 16);
-
-    dbg_printf("\n---\ndone\n");
-    while(1) ;
-}
-#endif
 
 /**
   * @brief Ye olde main

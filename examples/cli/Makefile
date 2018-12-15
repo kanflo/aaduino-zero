@@ -32,7 +32,8 @@ OBJS = \
 	$(COMMON)/ringbuf.o \
 	$(COMMON)/tick.o \
 	$(COMMON)/dbg_printf.o \
-	$(COMMON)/mini-printf.o
+	$(COMMON)/mini-printf.o \
+	$(COMMON)/libopencm3-additions.o
 
 
 include $(ROOT)/libopencm3.target.mk
