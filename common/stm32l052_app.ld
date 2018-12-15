@@ -5,7 +5,7 @@ flash_size = 32k;
 ram_base = 0x20000000;
 ram_size   = 8k;
 
-boot_size = 4k; /* Will change as the bootloader is implemented and optimized */
+boot_size = 8k; /* Will change as the bootloader is implemented and optimized */
 bootcom_size = 16;
 vector_size = 336;
 past_start = 0x08080000; /** EEPROM */
