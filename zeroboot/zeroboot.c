@@ -128,6 +128,7 @@ int main(void)
         /** @todo: handle */
     }
 
+#if 0
     /** Temporary LED blinking to show we're alive */
     for (int i = 0; i < 5; i++) {
         for (volatile int j = 0; j < 500000; j++) ;
@@ -135,6 +136,7 @@ int main(void)
         for (volatile int j = 0; j < 100000; j++) ;
         hw_set_led(false);
     }
+#endif
 
     hw_deinit();
     (void) start_app();
