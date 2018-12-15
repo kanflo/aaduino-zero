@@ -90,4 +90,36 @@ bool past_erase_unit(past_t *past, past_id_t id);
   */
 bool past_format(past_t *past);
 
+
+/**
+ * @brief      Convenience function for writing an uint32_t to past
+ *
+ * @param[in]  id     the past unit
+ * @param[in]  value  the value
+ *
+ * @return     true if writing went well
+ */
+bool past_write_uint32(past_t *past, past_id_t id, uint32_t value);
+
+/**
+ * @brief      Convenience function for reading an uint32_t from past
+ *
+ * @param[in]  id     the past unit
+ * @param[in]  value  the value
+ *
+ * @return     true if unit existed and reading went well
+ */
+bool past_read_uint32(past_t *past, past_id_t id, uint32_t *value);
+
+/**
+ * @brief      Convenience function for writing C string (including zero
+ *             terminator) to past
+ *
+ * @param[in]  id     the past unit
+ * @param[in]  str  the string
+ *
+ * @return     true if writing went well
+ */
+bool past_write_cstr(past_t *past, past_id_t id, char *str);
+
 #endif // __PAST_H__
