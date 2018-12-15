@@ -56,6 +56,13 @@ extern long _past_start;
 extern long _past_end;
 extern long _bootcom_start;
 extern long _bootcom_end;
+extern long past_start, past_block_size;
+
+static past_t g_past;
+
+#define RX_BUF_SIZE  (16)
+static ringbuf_t rx_buf;
+static uint8_t rx_buffer[2*RX_BUF_SIZE];
 
 /**
   * @brief Branch to main application
@@ -99,10 +106,21 @@ static void halt(uint32_t count)
   */
 int main(void)
 {
-    hw_init();
+    ringbuf_init(&rx_buf, (uint8_t*) rx_buffer, sizeof(rx_buffer));
+    hw_init(&rx_buf);
     hw_spi_init();
+    dbg_printf("AAduino Zero Bootloader\n");
     if (!spiflash_probe()) {
+        dbg_printf("SPI flash probe failed!\n");
         halt(2);
+    }
+
+    g_past.blocks[0] = (uint32_t) &past_start;
+    g_past.blocks[1] = (uint32_t) &past_start + (uint32_t) &past_block_size;
+    g_past._block_size = (uint32_t) &past_block_size;
+    if (!past_init(&g_past)) {
+        dbg_printf("Past init failed!\n");
+        halt(3);
     }
 
     uint32_t foo, bar;
@@ -110,6 +128,7 @@ int main(void)
         /** @todo: handle */
     }
 
+    /** Temporary LED blinking to show we're alive */
     for (int i = 0; i < 5; i++) {
         for (volatile int j = 0; j < 500000; j++) ;
         hw_set_led(true);
@@ -117,9 +136,11 @@ int main(void)
         hw_set_led(false);
     }
 
+    hw_deinit();
     (void) start_app();
+    dbg_printf("App returned :-/\n");
 
     /** Nothing to boot */
-    halt(3);
+    halt(4);
     return 0;
 }

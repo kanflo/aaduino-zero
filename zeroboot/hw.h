@@ -28,13 +28,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <gpio.h>
+#include "ringbuf.h"
 #include "pindefs.h"
 
 /**
   * @brief Initialize the hardware
   * @retval None
   */
-void hw_init(void);
+void hw_init(ringbuf_t *usart_rx_buf);
+
+/**
+ * @brief      Deinitialize certain hardware blocks before jumping to the
+ *             application
+ */
+void hw_deinit(void);
 
 /**
   * @brief Initialize the hardware

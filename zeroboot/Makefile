@@ -15,6 +15,9 @@ OBJS = \
 	$(COMMON)/past.o \
 	$(COMMON)/bootcom.o \
 	$(COMMON)/spiflash.o \
+	$(COMMON)/ringbuf.o \
+	$(COMMON)/dbg_printf.o \
+	$(COMMON)/mini-printf.o \
 	$(COMMON)/crc16.o
 
 # Bootloader linker script

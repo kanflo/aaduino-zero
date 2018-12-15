@@ -27,26 +27,50 @@
 #include <rcc.h>
 #include <pwr.h>
 #include <adc.h>
+#include <usart.h>
 #include <nvic.h>
 #include <exti.h>
 #include <spi.h>
 #include <flash.h>
 #include "hw.h"
 #include "spi_driver.h"
+#include "dbg_printf.h"
 
 static void clock_init(void);
 static void adc_init(void);
+static void usart_init(void);
+
+static ringbuf_t *rx_buf;
 
 /**
   * @param usart_rx_buf pointer to UART ring buffer, may be null.
   * @retval None
   */
-void hw_init(void)
+void hw_init(ringbuf_t *usart_rx_buf)
 {
+    rx_buf = usart_rx_buf;
     clock_init();
     gpio_mode_setup(LED_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_PIN);
+
+    /** Setup GPIO pins for USART1 */
+    gpio_mode_setup(USART1_RXI_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, USART1_RXI_PIN);
+    gpio_set_af(USART1_RXI_PORT, USART1_RXI_AF, USART1_RXI_PIN);
+    gpio_mode_setup(USART1_TXO_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, USART1_TXO_PIN);
+    gpio_set_af(USART1_TXO_PORT, USART1_TXO_AF, USART1_TXO_PIN);
+
+    usart_init();
 }
 
+/**
+ * @brief      Deinitialize certain hardware blocks before jumping to the
+ *             application
+ */
+void hw_deinit(void)
+{
+    usart_disable_rx_interrupt(USART1);
+    nvic_disable_irq(NVIC_USART1_IRQ);
+    usart_disable(USART1);
+}
 /**
   * @brief Initialize the hardware
   * @param on LED on or off
@@ -154,4 +178,41 @@ static void adc_init(void)
     adc_power_on(ADC1);
     adc_enable_vrefint();
     ADC_CHSELR(ADC1) = 1 << ADC_CHANNEL_VREF;
+}
+
+/**
+  * @brief Initialize USART1
+  * @retval None
+  */
+static void usart_init(void)
+{
+    /* Setup USART1 parameters. */
+    rcc_periph_clock_enable(RCC_USART1);
+    usart_set_baudrate(USART1, 115200);
+    usart_set_databits(USART1, 8);
+    usart_set_parity(USART1, USART_PARITY_NONE);
+    usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
+    usart_set_mode(USART1, USART_MODE_TX_RX); // USART_MODE_TX);
+    usart_set_flow_control(USART1, USART_FLOWCONTROL_NONE);
+    usart_enable(USART1);
+    nvic_enable_irq(NVIC_USART1_IRQ);
+    usart_enable_rx_interrupt(USART1);
+    dbg_printf("\n---\n");
+}
+
+void usart1_isr(void)
+{
+    if ((USART_CR1(USART1) & USART_CR1_RXNEIE) != 0 &&
+        (USART_ISR(USART1) & USART_ISR_RXNE) != 0) {
+        uint16_t ch = usart_recv(USART1);
+        if ((USART_ISR(USART1) & USART_ISR_ORE) == 0 &&
+            (USART_ISR(USART1) & USART_ISR_FE) == 0 &&
+            (USART_ISR(USART1) & USART_ISR_PE) == 0) {
+            if (!ringbuf_put(rx_buf, ch)) {
+                //printf("ASSERT:usart1_isr:%d\n", __LINE__);
+            }
+        } else {
+            //printf("ASSERT:usart1_isr:%d\n", __LINE__);
+        }
+    }
 }
