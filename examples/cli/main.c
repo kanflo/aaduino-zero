@@ -365,7 +365,7 @@ static void rfm_init(void)
         return;
     }
     if (!past_read_unit(&g_past, past_rfm_key, (const void **) &aesKey, &len)) {
-        dbg_printf("ERROR: RFM ARM key missing\n");
+        dbg_printf("ERROR: RFM AES key missing\n");
         return;
     }
 
@@ -383,25 +383,6 @@ static void rfm_init(void)
         rfm69link_setNodeId(*node_id);
         rfm69link_setNetworkId(*network_id);
         dbg_printf("RFM69 init ok\n");
-    }
-}
-
-static void past_set_uint32(parameter_id_t id, uint32_t value)
-{
-    dbg_printf("%d:%d\n", id, value);
-    if (past_write_unit(&g_past, id, (void*)&value, sizeof(value))) {
-        dbg_printf("OK\n");
-    } else {
-        dbg_printf("ERROR\n");
-    }
-}
-
-static void past_set_str(parameter_id_t id, char *str, uint32_t len)
-{
-   if (past_write_unit(&g_past, id, (void*)str, len)) {
-        dbg_printf("OK\n");
-    } else {
-        dbg_printf("ERROR\n");
     }
 }
 
@@ -435,18 +416,18 @@ static void rfm_handler(uint32_t argc, char *argv[])
         }
     } else if (argc == 3) {
         if (strcmp(cmd, "id") == 0) {
-            past_set_uint32(past_rfm_node_id, atoi(argv[2]));
+            past_write_uint32(&g_past, past_rfm_node_id, atoi(argv[2]));
         } else if (strcmp(cmd, "net") == 0) {
-            past_set_uint32(past_rfm_net_id, atoi(argv[2]));
+            past_write_uint32(&g_past, past_rfm_net_id, atoi(argv[2]));
         } else if (strcmp(cmd, "gw") == 0) {
-            past_set_uint32(past_rfm_gateway_id, atoi(argv[2]));
+            past_write_uint32(&g_past, past_rfm_gateway_id, atoi(argv[2]));
         } else if (strcmp(cmd, "pwr") == 0) {
-            past_set_uint32(past_rfm_max_power, atoi(argv[2]));
+            past_write_uint32(&g_past, past_rfm_max_power, atoi(argv[2]));
         } else if (strcmp(cmd, "key") == 0) {
             if (strlen(argv[2]) != 16) {
                 dbg_printf("ERROR: key must be 16 bytes\n");
             } else {
-                past_set_str(past_rfm_key, argv[2], 16);
+                past_write_cstr(&g_past, past_rfm_key, argv[2]);
             }
         } else {
             dbg_printf("ERROR: Illegal command\n");
@@ -546,7 +527,7 @@ static void spiflash_handler(uint32_t argc, char *argv[])
     }
     dbg_printf("Writing page 0\n");
     if (!spiflash_write(0, sizeof(write_buf), (uint8_t*) write_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
 
@@ -555,7 +536,7 @@ static void spiflash_handler(uint32_t argc, char *argv[])
     }
     dbg_printf("Writing page 1\n");
     if (!spiflash_write(256, sizeof(write_buf), (uint8_t*) write_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
 
@@ -567,12 +548,12 @@ static void spiflash_handler(uint32_t argc, char *argv[])
     memset(read_buf, 0xcd, sizeof(read_buf));
     dbg_printf("Reading page 0\n");
     if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     for (uint32_t i = 0; i < sizeof(write_buf); i++) {
         if (write_buf[i] != read_buf[i]) {
-            dbg_printf("Verification failed at %d\n", i);
+            dbg_printf("Failed\n");
         }
     }
 
@@ -582,38 +563,38 @@ static void spiflash_handler(uint32_t argc, char *argv[])
     memset(read_buf, 0xcd, sizeof(read_buf));
     dbg_printf("Reading page 1\n");
     if (!spiflash_read(256, sizeof(read_buf), (uint8_t*) read_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     for (uint32_t i = 0; i < sizeof(write_buf); i++) {
         if (write_buf[i] != read_buf[i]) {
-            dbg_printf("Verification failed at %d\n", i);
+            dbg_printf("Failed\n");
         }
     }
 
     /** Test page erase */
     dbg_printf("Erasing page 0\n");
     if (!spiflash_erase(0, sizeof(write_buf))) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     for (uint32_t i = 0; i < sizeof(read_buf); i++) {
         if (read_buf[i] != 0xff) {
-            dbg_printf("Erase failed at %d (%02x)\n", i, read_buf[i]);
+            dbg_printf("Failed\n");
         }
     }
 
     dbg_printf("Erasing page 1\n");
     if (!spiflash_erase(256, sizeof(write_buf))) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     if (!spiflash_read(256, sizeof(read_buf), (uint8_t*) read_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     for (uint32_t i = 0; i < sizeof(read_buf); i++) {
@@ -630,15 +611,15 @@ static void spiflash_handler(uint32_t argc, char *argv[])
         write_buf[i] = i;
     }
     if (!spiflash_write(0, sizeof(write_buf), (uint8_t*) write_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     if (!spiflash_chip_erase()) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     if (!spiflash_read(0, sizeof(read_buf), (uint8_t*) read_buf)) {
-        dbg_printf("Failed at %d\n", __LINE__);
+        dbg_printf("Failed\n");
         return;
     }
     for (uint32_t i = 0; i < sizeof(read_buf); i++) {
