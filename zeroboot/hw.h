@@ -28,29 +28,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <gpio.h>
-
-#define LED_PORT          GPIOA
-#define LED_PIN           GPIO6
-
-
-#define SPI1_MOSI_PORT    GPIOB
-#define SPI1_MOSI_PIN     GPIO5
-#define SPI1_MOSI_AF      GPIO_AF0
-#define SPI1_MISO_PORT    GPIOB
-#define SPI1_MISO_PIN     GPIO4
-#define SPI1_MISO_AF      GPIO_AF0
-#define SPI1_SCK_PORT     GPIOB
-#define SPI1_SCK_PIN      GPIO3
-#define SPI1_SCK_AF       GPIO_AF0
-#define SPI1_RFM_CS_PORT  GPIOA
-#define SPI1_RFM_CS_PIN   GPIO15
-#define SPI1_FLASH_CS_PORT  GPIOA
-#define SPI1_FLASH_CS_PIN   GPIO12
-
-#define RFM_RESET_PORT    GPIOA
-#define RFM_RESET_PIN     GPIO3
-#define RFM_IRQ_PORT      GPIOA
-#define RFM_IRQ_PIN       GPIO7
+#include "pindefs.h"
 
 /**
   * @brief Initialize the hardware

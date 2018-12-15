@@ -29,53 +29,8 @@
 #include <stdbool.h>
 #include <gpio.h>
 #include "ringbuf.h"
+#include "pindefs.h"
 
-#define BUTTON_SEL_PORT   GPIOA
-#define BUTTON_SEL_PIN    GIO2
-#define BUTTON_SEL_EXTI   EXTI2
-#define BUTTON_SEL_isr    exti2_isr
-#define BUTTON_SEL_NVIC   NVIC_EXTI2_IRQ
-
-#define LED_PORT          GPIOA
-#define LED_PIN           GPIO6
-
-#define AUX_PORT          GPIOB
-#define AUX_PIN           GPIO15
-
-#define USART1_TXO_PORT   GPIOA
-#define USART1_TXO_PIN    GPIO9
-#define USART1_TXO_AF     GPIO_AF4
-#define USART1_RXI_PORT   GPIOA
-#define USART1_RXI_PIN    GPIO10
-#define USART1_RXI_AF     GPIO_AF4
-
-#define I2C1_SCL_PORT     GPIOB
-#define I2C1_SCL_PIN      GPIO6
-#define I2C1_SCL_AF       GPIO_AF1
-#define I2C1_SDA_PORT     GPIOB
-#define I2C1_SDA_PIN      GPIO7
-#define I2C1_SDA_AF       GPIO_AF1
-
-#define SPI1_MOSI_PORT    GPIOB
-#define SPI1_MOSI_PIN     GPIO5
-#define SPI1_MOSI_AF      GPIO_AF0
-#define SPI1_MISO_PORT    GPIOB
-#define SPI1_MISO_PIN     GPIO4
-#define SPI1_MISO_AF      GPIO_AF0
-#define SPI1_SCK_PORT     GPIOB
-#define SPI1_SCK_PIN      GPIO3
-#define SPI1_SCK_AF       GPIO_AF0
-#define SPI1_RFM_CS_PORT  GPIOA
-#define SPI1_RFM_CS_PIN   GPIO15
-#define SPI1_FLASH_CS_PORT  GPIOA
-#define SPI1_FLASH_CS_PIN   GPIO12
-
-#define TEMP_ALERT_PORT   GPIOA
-#define TEMP_ALERT_PIN    GPIO0
-#define RFM_RESET_PORT    GPIOA
-#define RFM_RESET_PIN     GPIO3
-#define RFM_IRQ_PORT      GPIOA
-#define RFM_IRQ_PIN       GPIO7
 
 /**
   * @brief Initialize the hardware
