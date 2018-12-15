@@ -6,7 +6,7 @@ COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON) -DGIT_VERSION=\"$(GIT_VERSION)\" -DCONFIG_PAST_NO_GC
 # Future optimisation: saves ~600 bytes but does not work for gcc <= 7
 #CFLAGS += -flto
-
+DEBUG = 1
 CFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections
 
 OBJS = \
