@@ -1,7 +1,8 @@
 
+#include <stdint.h>
+#include <stdbool.h>
 #include <flash.h>
 #include "libopencm3-additions.h"
-#include "dbg_printf.h"
 
 /** @todo: these should go into lib/stm32/common/flash_common_l01.c */
 
@@ -22,17 +23,13 @@ void flash_wait_for_last_operation(void)
  */
 void flash_program_word(uint32_t address, uint32_t data)
 {
-    flash_wait_for_last_operation();
-
-    *((volatile uint32_t*) address) = data;
-
+    MMIO32(address) = data;
     flash_wait_for_last_operation();
 
     uint32_t sr = FLASH_SR;
     if ((sr & FLASH_SR_EOP) != 0) {
         FLASH_SR = FLASH_SR_EOP;
     } else {
-        dbg_printf("Flash program failed: 0x%08x\n", sr);
         /** @todo: handle error */
     }
 }
@@ -76,11 +73,8 @@ the FLASH programming manual for details.
 */
 void flash_erase_page(uint32_t page_address)
 {
-#if 1
-    flash_wait_for_last_operation();
-
     FLASH_PECR |= FLASH_PECR_ERASE | FLASH_PECR_PROG;
-    *((volatile uint32_t*) page_address) = 0;
+    MMIO32(page_address) = 0;
 
     flash_wait_for_last_operation();
 
@@ -90,15 +84,4 @@ void flash_erase_page(uint32_t page_address)
         /** @todo: handle flash errors */
     }
     FLASH_PECR &= ~(FLASH_PECR_ERASE | FLASH_PECR_PROG);
-#else
-    flash_wait_for_last_operation();
-
-    FLASH_CR |= FLASH_CR_PER;
-    FLASH_AR = page_address;
-    FLASH_CR |= FLASH_CR_STRT;
-
-    flash_wait_for_last_operation();
-
-    FLASH_CR &= ~FLASH_CR_PER;
-#endif
 }
