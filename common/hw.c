@@ -36,7 +36,9 @@
 #include <libopencmsis/core_cm3.h>
 #include "dbg_printf.h"
 #include "tick.h"
-#include "sw_i2c.h"
+#ifndef CONFIG_SKIP_I2C
+ #include "sw_i2c.h"
+#endif // CONFIG_SKIP_I2C
 #include "hw.h"
 #include "spi_driver.h"
 
@@ -54,7 +56,9 @@ static void clock_init(void);
 static void usart_init(void);
 static void gpio_init(void);
 static void exti_init(void);
+#ifndef CONFIG_SKIP_I2C
 static void i2c_init(void);
+#endif // CONFIG_SKIP_I2C
 static void spi_init(void);
 static void adc_init(void);
 static void lse_init(void);
@@ -94,7 +98,9 @@ void hw_init(ringbuf_t *usart_rx_buf)
     usart_init();
     exti_init();
     tim2_init();
+#ifndef CONFIG_SKIP_I2C
     i2c_init();
+#endif // CONFIG_SKIP_I2C
     spi_init();
     adc_init();
     lse_init();
@@ -241,6 +247,7 @@ static void clock_init(void)
     rcc_periph_clock_enable(RCC_SPI1);
 }
 
+#ifndef CONFIG_SKIP_I2C
 /**
   * @brief Initialize I2C1
   * @retval None
@@ -308,6 +315,7 @@ static void i2c_init(void)
     i2c_peripheral_enable(I2C1);
 #endif
 }
+#endif // CONFIG_SKIP_I2C
 
 /**
   * @brief Initialize SPI1
