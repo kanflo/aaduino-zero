@@ -33,8 +33,8 @@
 #include <spi.h>
 #include <flash.h>
 #include "hw.h"
+#include "tick.h"
 #include "spi_driver.h"
-#include "dbg_printf.h"
 
 static void clock_init(void);
 static void adc_init(void);
@@ -57,7 +57,7 @@ void hw_init(ringbuf_t *usart_rx_buf)
     gpio_set_af(USART1_RXI_PORT, USART1_RXI_AF, USART1_RXI_PIN);
     gpio_mode_setup(USART1_TXO_PORT, GPIO_MODE_AF, GPIO_PUPD_NONE, USART1_TXO_PIN);
     gpio_set_af(USART1_TXO_PORT, USART1_TXO_AF, USART1_TXO_PIN);
-
+    systick_init();
     usart_init();
 }
 
@@ -70,6 +70,7 @@ void hw_deinit(void)
     usart_disable_rx_interrupt(USART1);
     nvic_disable_irq(NVIC_USART1_IRQ);
     usart_disable(USART1);
+    systick_deinit();
 }
 /**
   * @brief Initialize the hardware
@@ -149,7 +150,7 @@ static void clock_init(void)
     /* Set up the PLL */
     rcc_set_pll_multiplier(RCC_CFGR_PLLMUL_MUL4);
     rcc_set_pll_divider(RCC_CFGR_PLLDIV_DIV4);
-    rcc_set_pll_source(0 /** RCC_CFGR_PLLSRC_HSI_CLK */);
+    rcc_set_pll_source(RCC_CFGR_PLLSRC_HSI16_CLK);
 
     rcc_osc_on(RCC_PLL);
     rcc_wait_for_osc_ready(RCC_PLL);
@@ -197,7 +198,6 @@ static void usart_init(void)
     usart_enable(USART1);
     nvic_enable_irq(NVIC_USART1_IRQ);
     usart_enable_rx_interrupt(USART1);
-    dbg_printf("\n---\n");
 }
 
 void usart1_isr(void)
@@ -214,5 +214,7 @@ void usart1_isr(void)
         } else {
             //printf("ASSERT:usart1_isr:%d\n", __LINE__);
         }
+    } else {
+      while(1) ;
     }
 }
