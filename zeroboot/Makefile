@@ -6,7 +6,7 @@ COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON) -DGIT_VERSION=\"$(GIT_VERSION)\" -DCONFIG_PAST_NO_GC
 # Future optimisation: saves ~600 bytes but does not work for gcc <= 7
 #CFLAGS += -flto
-DEBUG = 1
+DEBUG = 0
 CFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections
 
 OBJS = \
@@ -16,9 +16,14 @@ OBJS = \
 	$(COMMON)/bootcom.o \
 	$(COMMON)/spiflash.o \
 	$(COMMON)/ringbuf.o \
-	$(COMMON)/dbg_printf.o \
-	$(COMMON)/mini-printf.o \
-	$(COMMON)/crc16.o
+	$(COMMON)/fwupgrade.o \
+	$(COMMON)/tick.o \
+	$(COMMON)/uframe.o \
+	$(COMMON)/crc16.o \
+	$(COMMON)/libopencm3-additions.o
+
+#	$(COMMON)/dbg_printf.o
+#	$(COMMON)/mini-printf.o
 
 # Bootloader linker script
 LDSCRIPT = stm32l052_boot.ld

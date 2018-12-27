@@ -42,6 +42,8 @@ typedef enum {
     past_boot_git_hash,
     past_app_git_hash,
 
+    #include "fwu_pastunits.h"
+
     /** A past unit who's presence indicates we have a non finished upgrade and
     must not boot */
     past_upgrade_started = 0xff
