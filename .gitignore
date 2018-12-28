@@ -7,6 +7,7 @@
 *.obj
 *.elf
 *.bin
+*.pyc
 
 # Linker output
 *.ilk
