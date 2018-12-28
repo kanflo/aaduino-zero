@@ -85,7 +85,7 @@ class tty_interface(comm_interface):
 
     def open(self):
         if not self._port_handle:
-            self._port_handle = serial.Serial(baudrate = 115200, timeout = 1.0)
+            self._port_handle = serial.Serial(baudrate = 115200, timeout = 10.0)
             self._port_handle.port = self._if_name
             self._port_handle.open()
         return True
@@ -162,6 +162,14 @@ def handle_response(command, frame, args):
         cmd = frame.unpack8()
         status = frame.unpack8()
         ret_dict["status"] = status
+    elif resp_command == cmd_fwu_download_start or resp_command == cmd_fwu_data:
+        cmd = frame.unpack8()
+        status = frame.unpack8()
+        ret_dict["status"] = status
+    elif resp_command == cmd_fwu_upgrade or resp_command == cmd_fwu_downgrade:
+        cmd = frame.unpack8()
+        status = frame.unpack8()
+        ret_dict["status"] = status
     else:
         print("Unknown response %d from device." % (resp_command))
 
@@ -206,6 +214,10 @@ def handle_commands(args):
         communicate(comms, create_cmd(cmd_ping), args)
     if args.firmware:
         run_upgrade(comms, args.firmware, args)
+    if args.fwu:
+        download_fwu(comms, args.fwu, args)
+    if args.runfwu:
+        run_fwu(comms, args)
 
 # Darn beautiful, from SO: https://stackoverflow.com/a/1035456
 def chunk_from_file(filename, chunk_size):
@@ -218,7 +230,7 @@ def chunk_from_file(filename, chunk_size):
                 break
 
 """
-Run OpenDPS firmware upgrade
+Run AAduino Zero firmware upgrade
 """
 def run_upgrade(comms, fw_file_name, args):
     with open(fw_file_name, mode='rb') as file:
@@ -232,7 +244,6 @@ def run_upgrade(comms, fw_file_name, args):
     ret_dict = communicate(comms, create_upgrade_start(chunk_size, crc), args)
     if ret_dict["status"] == upgrade_continue:
         if chunk_size != ret_dict["chunk_size"]:
-            print("Device selected chunk size %d" % (ret_dict["chunk_size"]))
             chunk_size = ret_dict["chunk_size"]
         counter = 0
         for chunk in chunk_from_file(fw_file_name, chunk_size):
@@ -267,6 +278,49 @@ def run_upgrade(comms, fw_file_name, args):
     sys.exit(os.EX_OK)
 
 """
+Download FWU image
+"""
+def download_fwu(comms, fw_file_name, args):
+    with open(fw_file_name, mode='rb') as file:
+        #crc = binascii.crc32(file.read()) % (1<<32)
+        content = file.read()
+        if content.encode('hex')[6:8] != "20" and not args.force:
+            fail("The firmware file does not seem valid, use --force to force upgrade")
+        crc = CRCCCITT().calculate(content)
+        print("Crc: %x" % crc)
+    ret_dict = communicate(comms, create_fwu_download_start(len(content), crc), args)
+    if ret_dict["status"] == 1:
+        chunk_size = 16
+        counter = 0
+        for chunk in chunk_from_file(fw_file_name, chunk_size):
+            counter += len(chunk)
+            sys.stdout.write("\rDownload progress: %d%% " % (counter*1.0/len(content)*100.0) )
+            sys.stdout.flush()
+#            print(" %d bytes" % (counter))
+
+            ret_dict = communicate(comms, create_fwu_download_data(chunk), args)
+            status = ret_dict["status"]
+            if status == 1:
+                pass
+            else:
+                print("")
+                fail("device reported an unknown error (%d)" % status)
+    else:
+        fail("Device rejected FWU")
+    sys.exit(os.EX_OK)
+
+"""
+Run FWU
+"""
+def run_fwu(comms, args):
+    ret_dict = communicate(comms, create_run_fwu(), args)
+    if ret_dict["status"] == 1:
+        print("Success!")
+    else:
+        fail("Device rejected FWU")
+    sys.exit(os.EX_OK)
+
+"""
 Create and return a comminications interface object or None if no comms if
 was specified.
 """
@@ -297,6 +351,8 @@ def main():
     parser.add_argument('-v', '--verbose', action='store_true', help="Verbose communications")
     parser.add_argument('-u', '--upgrade', type=str, dest="firmware", help="Perform upgrade of OpenDPS firmware")
     parser.add_argument('-f', '--force', action='store_true', help="Force upgrade even if dpsctl complains about the firmware")
+    parser.add_argument('-F', '--fwu', type=str, dest="fwu", help="Download FWU image")
+    parser.add_argument('-U', '--runfwu', action='store_true', help="Run FWU")
     args, unknown = parser.parse_known_args()
     try:
         handle_commands(args)

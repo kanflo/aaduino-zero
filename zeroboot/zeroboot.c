@@ -63,16 +63,13 @@
 #endif
 
 #define RX_BUF_SIZE       (64)
-#define MAX_CHUNK_SIZE   (128) /** Flash page size on STM32L052 */
+/** Something >= flash_block_size form the linker file, we need a value at compile time */
+#define MAX_FRAME_SIZE   (512)
 
 /** Linker file symbols */
-extern long _app_start;
-extern long _app_end;
-extern long _past_start;
-extern long _past_end;
-extern long _bootcom_start;
-extern long _bootcom_end;
-extern long past_start, past_block_size;
+extern long app_start, app_size;
+extern long _bootcom_start, _bootcom_end;
+extern long past_start, past_block_size, flash_block_size;
 
 static past_t g_past;
 static upgrade_reason_t reason = reason_unknown;
@@ -82,7 +79,7 @@ static ringbuf_t rx_buf;
 static uint8_t buffer[2*RX_BUF_SIZE];
 
 /** UART frame buffer */
-static uint8_t frame_buffer[FRAME_OVERHEAD(MAX_CHUNK_SIZE)];
+static uint8_t frame_buffer[FRAME_OVERHEAD(MAX_FRAME_SIZE)];
 static uint32_t rx_idx = 0;
 static bool receiving_frame = false;
 
@@ -108,7 +105,7 @@ static void send_start_response(void)
     FINISH_FRAME();
     uint32_t setting = 1;
     (void) past_write_unit(&g_past, past_upgrade_started, (void*) &setting, sizeof(setting));
-    cur_flash_address = (uint32_t) &_app_start;
+    cur_flash_address = (uint32_t) &app_start;
     send_frame(_buffer, _length);
 }
 
@@ -156,11 +153,11 @@ static bool start_app(void)
     hw_deinit();
 #if 0
     /** Branch to the address in the reset entry of the app's exception vector */
-    uint32_t *app_start = (uint32_t*) (4 + (uint32_t) &_app_start);
+    uint32_t *app_start = (uint32_t*) (4 + (uint32_t) &app_start);
     /** Is there something there we can branch to? */
     if (((*app_start) & 0xffff0000) == 0x08000000) {
         /** Initialize stack pointer of user app */
-        volatile uint32_t *sp = (volatile uint32_t*) &_app_start;
+        volatile uint32_t *sp = (volatile uint32_t*) &app_start;
         __asm (
             "mov sp, %0\n" : : "r" (*sp)
         );
@@ -185,25 +182,6 @@ static void halt(uint32_t count)
             for (volatile int j = 0; j < 100000; j++) ;
         }
     }
-}
-
-static bool is_erased(uint32_t page_addr)
-{
-    uint32_t num_fails = 0;
-    uint32_t *p = (uint32_t*) page_addr;
-    bool success = true;
-    for (int i = 0; i < chunk_size/4; i++) {
-        if (p[i] != 0) {
-            num_fails++;
-            if (num_fails > 10) {
-                return false;
-            }
-            //dbg_printf("# Erasing failed at 0x%08x", page_addr + 4*i);
-            //dbg_printf("(0x%08x)\n", p[i]);
-            success = false;
-        }
-    }
-    return success;
 }
 
 /**
@@ -242,15 +220,60 @@ static void handle_frame(uint8_t *frame, uint32_t length)
         FINISH_FRAME();
         send_frame(_buffer, _length);
     } else {
-        cmd = frame[0];
+        cmd = payload[0];
         switch(cmd) {
+#ifdef CONFIG_BOOTLOADER_UART_FWU_SUPPORT
+            case cmd_fwu_download_start:
+            {
+                uint16_t size, crc16;
+                bool success;
+                {
+                    DECLARE_UNPACK(payload, length);
+                    UNPACK8(cmd);
+                    UNPACK16(size);
+                    UNPACK16(crc16);
+                }
+                dbg_printf("# FWU start %d bytes\n", size);
+                success = fwu_start_download(size, crc16);
+                {
+                    DECLARE_FRAME(MAX_FRAME_LENGTH);
+                    PACK8(cmd_response | cmd_fwu_download_start);
+                    PACK8(success);
+                    FINISH_FRAME();
+                    send_frame(_buffer, _length);
+                }
+                break;
+            }
+            case cmd_fwu_data:
+            {
+                fwu_got_data(&(payload[1]), payload_len - 1);
+                {
+                    DECLARE_FRAME(MAX_FRAME_LENGTH);
+                    PACK8(cmd_response | cmd_fwu_data);
+                    PACK8(1);
+                    FINISH_FRAME();
+                    send_frame(_buffer, _length);
+                }
+                break;
+            }
+            case cmd_fwu_upgrade:
+            {
+                bool success = fwu_run_upgrade();
+                DECLARE_FRAME(MAX_FRAME_LENGTH);
+                PACK8(cmd_response | cmd_fwu_upgrade);
+                PACK8(success);
+                FINISH_FRAME();
+                send_frame(_buffer, _length);
+                break;
+            }
+#endif // CONFIG_BOOTLOADER_UART_FWU_SUPPORT
             case cmd_upgrade_start:
             {
                 {
                     DECLARE_UNPACK(payload, length);
                     UNPACK8(cmd);
                     UNPACK16(chunk_size);
-                    chunk_size = MAX_CHUNK_SIZE /** MIN(MAX_CHUNK_SIZE, chunk_size) */;
+                    chunk_size = (uint32_t) &flash_block_size;
                     UNPACK16(fw_crc16);
                 }
                 counter = 0;
@@ -271,7 +294,7 @@ static void handle_frame(uint8_t *frame, uint32_t length)
                     status = upgrade_protocol_error;
                 } else if (payload_len < 0) {
                     status = upgrade_crc_error;
-                } else if (cur_flash_address >= (uint32_t) &_app_end) {
+                } else if (cur_flash_address >= (uint32_t) &app_start + (uint32_t) &app_size) {
                     status = upgrade_overflow_error;
                 } else {
                     status = upgrade_continue; /** think positive thoughts */
@@ -279,23 +302,19 @@ static void handle_frame(uint8_t *frame, uint32_t length)
                     if (chunk_length > 0) {
                         flash_unlock();
                         flash_erase_page(cur_flash_address);
-                        if (!is_erased(cur_flash_address)) {
-                            status = upgrade_erase_error;
-                        } else {
-                            uint32_t word;
-                            status = upgrade_continue; // Think positive
-                            /** Note, payload contains 1 frame type byte and N bytes data */
-                            for (uint32_t i = 0; i < (uint32_t) chunk_length; i+=4) {
-                                /** @todo: Handle binaries not size aliged to 4 bytes */
-                                word = payload[i+4] << 24 | payload[i+3] << 16 | payload[i+2] << 8 | payload[i+1];
-                                flash_program_word(cur_flash_address + i, word);
-                            }
-                            cur_flash_address += chunk_length;
+                        uint32_t word;
+                        status = upgrade_continue; // Think positive
+                        /** Note, payload contains 1 frame type byte and N bytes data */
+                        for (uint32_t i = 0; i < (uint32_t) chunk_length; i+=4) {
+                            /** @todo: Handle binaries not size aliged to 4 bytes */
+                            word = payload[i+4] << 24 | payload[i+3] << 16 | payload[i+2] << 8 | payload[i+1];
+                            flash_program_word(cur_flash_address + i, word);
                         }
+                        cur_flash_address += chunk_length;
                         flash_lock();
                     }
                     if (chunk_length < chunk_size) { /** @todo verify code for even kb binaries */
-                        uint16_t calc_crc = crc16((uint8_t*) &_app_start, cur_flash_address - (uint32_t) &_app_start);
+                        uint16_t calc_crc = crc16((uint8_t*) &app_start, cur_flash_address - (uint32_t) &app_start);
                         status = fw_crc16 == calc_crc ? upgrade_success : upgrade_crc_error;
                     }
                 }
@@ -360,12 +379,16 @@ int main(void)
             break;
         }
 
-        if (bootcom_get(&magic, &temp) && magic == 0xfedebeda) {
-            /** We got invoced by the app */
-            chunk_size = temp >> 16;
-            fw_crc16 = temp & 0xffff;
-            enter_upgrade = true;
-            reason = reason_bootcom;
+        if (bootcom_get(&magic, &temp)) {
+            /** We got invoked by the app */
+            if (magic == 0xfedebeda) {
+                chunk_size = temp >> 16;
+                fw_crc16 = temp & 0xffff;
+                enter_upgrade = true;
+                reason = reason_bootcom;
+            } else if (magic == FWU_MAGIC) {
+                (void) fwu_run_upgrade();
+            }
             break;
         }
 

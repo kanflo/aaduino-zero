@@ -40,6 +40,10 @@ typedef enum {
     /** For historical reasons... */
     cmd_upgrade_start = 9,
     cmd_upgrade_data,
+    cmd_fwu_download_start,
+    cmd_fwu_data,
+    cmd_fwu_upgrade,
+    cmd_fwu_downgrade,
     cmd_response = 0x80
 } command_t;
 

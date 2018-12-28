@@ -29,6 +29,13 @@ import struct
 cmd_ping = 1
 cmd_upgrade_start = 9 # For historical reasons, these are 9 and 10
 cmd_upgrade_data = 10
+
+cmd_fwu_download_start = 11
+cmd_fwu_data = 12
+cmd_fwu_upgrade = 13
+cmd_fwu_downgrade = 14
+
+
 cmd_response = 0x80
 
 # upgrade_status_t
@@ -74,6 +81,29 @@ def create_upgrade_data(data):
         f.pack8(d)
     f.end()
     return f
+
+def create_fwu_download_start(size, crc):
+    f = uFrame()
+    f.pack8(cmd_fwu_download_start)
+    f.pack16(size)
+    f.pack16(crc)
+    f.end()
+    return f
+
+def create_fwu_download_data(data):
+    f = uFrame()
+    f.pack8(cmd_fwu_data)
+    for d in data:
+        f.pack8(d)
+    f.end()
+    return f
+
+def create_run_fwu():
+    f = uFrame()
+    f.pack8(cmd_fwu_upgrade)
+    f.end()
+    return f
+
 
 """
 Helpers for unpacking frames.

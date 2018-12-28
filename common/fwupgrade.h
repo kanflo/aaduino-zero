@@ -25,8 +25,11 @@
 #ifndef __FWUPGRADE_H__
 #define __FWUPGRADE_H__
 
-#include <stdarg.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "past.h"
+
+#define FWU_MAGIC (0xf07ad07a)
 
 /**
  * @brief      Initialize the firmware upgrade module
@@ -47,8 +50,10 @@ bool fwu_is_downloading(void);
  *
  * @param[in]  size   Size of received image
  * @param[in]  crc16  16 bit CRC of image
+ *
+ * @return     true if download can commence
  */
-void fwu_start_download(uint16_t size, uint16_t crc16);
+bool fwu_start_download(uint16_t size, uint16_t crc16);
 
 /**
  * @brief      Called when we got a chunk of data

@@ -2,10 +2,11 @@
 
 flash_base = 0x08000000;
 flash_size = 32k;
+flash_block_size = 128;
 ram_base = 0x20000000;
 ram_size   = 8k;
 
-boot_size = 16k; /* Will change as the bootloader is implemented and optimized */
+boot_size = 20k; /* Will change as the bootloader is implemented and optimized */
 bootcom_size = 16;
 vector_size = 336;
 past_start = 0x08080000; /** EEPROM */
@@ -29,9 +30,7 @@ INCLUDE cortex-m-generic.ld
 
 SECTIONS {
     .app : {
-        _app_start = .;
         . = . + app_size;
-        _app_end = .;
      } >app
 
     .past : {
