@@ -66,6 +66,9 @@
 /** Something >= flash_block_size form the linker file, we need a value at compile time */
 #define MAX_FRAME_SIZE   (512)
 
+/** Flash the LED during UART comms */
+#define LED_FLASH_COUNTER  (50000)
+
 /** Linker file symbols */
 extern long app_start, app_size;
 extern long _bootcom_start, _bootcom_end;
@@ -116,11 +119,21 @@ static void send_start_response(void)
   */
 static void handle_upgrade(uint32_t timeout_ms)
 {
+    uint32_t led_counter = 0;
+    bool led_on = true;
     if (fw_crc16) { /** azctl.py is expecting a response */
         send_start_response();
     }
     uint32_t start = mstimer_get();
+    hw_set_led(led_on);
+
     while(1) {
+        led_counter++;
+        if (led_counter == LED_FLASH_COUNTER) {
+            led_counter = 0;
+            led_on = !led_on;
+            hw_set_led(led_on);
+        }
         uint16_t b;
         if (ringbuf_get(&rx_buf, &b)) {
             if (b == _SOF) {
@@ -130,6 +143,7 @@ static void handle_upgrade(uint32_t timeout_ms)
             if (receiving_frame && rx_idx < sizeof(frame_buffer)) {
                 frame_buffer[rx_idx++] = b;
                 if (b == _EOF) {
+                    timeout_ms = 0;
                     handle_frame(frame_buffer, rx_idx);
                     receiving_frame = false;
                 }
@@ -142,6 +156,7 @@ static void handle_upgrade(uint32_t timeout_ms)
             }
         }
     }
+    hw_set_led(false);
 }
 
 /**
@@ -151,19 +166,17 @@ static void handle_upgrade(uint32_t timeout_ms)
 static bool start_app(void)
 {
     hw_deinit();
-#if 0
     /** Branch to the address in the reset entry of the app's exception vector */
-    uint32_t *app_start = (uint32_t*) (4 + (uint32_t) &app_start);
+    uint32_t *entry = (uint32_t*) (4 + (uint32_t) &app_start);
     /** Is there something there we can branch to? */
-    if (((*app_start) & 0xffff0000) == 0x08000000) {
+    if (((*entry) & 0xffff0000) == 0x08000000) {
         /** Initialize stack pointer of user app */
         volatile uint32_t *sp = (volatile uint32_t*) &app_start;
         __asm (
             "mov sp, %0\n" : : "r" (*sp)
         );
-        ((void (*)(void))*app_start)();
+        ((void (*)(void))*entry)();
     }
-#endif
     hw_init(&rx_buf);
     return false;
 }
@@ -233,7 +246,6 @@ static void handle_frame(uint8_t *frame, uint32_t length)
                     UNPACK16(size);
                     UNPACK16(crc16);
                 }
-                dbg_printf("# FWU start %d bytes\n", size);
                 success = fwu_start_download(size, crc16);
                 {
                     DECLARE_FRAME(MAX_FRAME_LENGTH);
@@ -356,8 +368,10 @@ int main(void)
 {
     uint32_t magic = 0, temp = 0;
     bool enter_upgrade = false;
+#if 0
     void *data;
     uint32_t length;
+#endif
 
     ringbuf_init(&rx_buf, (uint8_t*) buffer, sizeof(buffer));
     hw_init(&rx_buf);
@@ -392,12 +406,16 @@ int main(void)
             break;
         }
 
+#if 0
+    /** @todo: handle this, seems buggy right now */
         if (past_read_unit(&g_past, past_upgrade_started, (const void**) &data, &length)) {
             /** We have a non finished upgrade */
             enter_upgrade = true;
             reason = reason_unfinished_upgrade;
             break;
         }
+#endif
+
 #if 0
     /** Temporary LED blinking to show we're alive */
     for (int i = 0; i < 5; i++) {

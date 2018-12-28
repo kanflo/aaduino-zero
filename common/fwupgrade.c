@@ -27,7 +27,7 @@
 #include "pastunits.h"
 #include "spiflash.h"
 #include "crc16.h"
-#include "dbg_printf.h"
+//#include "dbg_printf.h"
 #include "libopencm3-additions.h"
 
 
@@ -142,7 +142,7 @@ bool fwu_start_download(uint16_t size, uint16_t crc16)
     bool success = false;
     do {
         if (size > (uint32_t) &app_size) {
-            dbg_printf("# DL size %d too large\n", size);
+            //dbg_printf("# DL size %d too large\n", size);
             break;
         }
 
@@ -165,11 +165,11 @@ bool fwu_start_download(uint16_t size, uint16_t crc16)
             /** Unit not found */
             g_dl_address = FWU_FLASH_START;
         }
-        dbg_printf("# Downloading to %d\n", g_dl_address);
+        //dbg_printf("# Downloading to %d\n", g_dl_address);
 
         if (!past_write_uint32(g_past, fwu_download_address, g_dl_address)) {
             /** @todo: handle past failures */
-            dbg_printf("# Past failure at %d\n", __LINE__);
+            //dbg_printf("# Past failure at %d\n", __LINE__);
             break;
         }
 
@@ -181,14 +181,14 @@ bool fwu_start_download(uint16_t size, uint16_t crc16)
 
         /** Make room for the image */
         if (!spiflash_erase(g_dl_address, g_image_size)) {
-            dbg_printf("# Failed erasing %d bytes at 0x%08x\n", g_image_size, g_dl_address);
+            //dbg_printf("# Failed erasing %d bytes at 0x%08x\n", g_image_size, g_dl_address);
             /** @todo: handle flash failures */
             break;
         }
 
         /** Write image header */
         if (!spiflash_write(g_dl_address, sizeof(header), (uint8_t*) &header)) {
-            dbg_printf("# Failed writing header\n");
+            //dbg_printf("# Failed writing header\n");
             /** @todo: handle flash failures */
             break;
         } else {
@@ -216,7 +216,7 @@ bool fwu_start_download(uint16_t size, uint16_t crc16)
 void fwu_got_data(uint8_t *data, uint8_t size)
 {
     if (!spiflash_write(g_dl_address, size, data)) {
-        dbg_printf("# Failed writing %d bytes at 0x%08x\n", size, g_dl_address);
+        //dbg_printf("# Failed writing %d bytes at 0x%08x\n", size, g_dl_address);
         /** @todo: handle flash failures */
     } else {
         g_dl_count += size;
@@ -225,7 +225,7 @@ void fwu_got_data(uint8_t *data, uint8_t size)
 
     if (fwu_download_complete()) {
         set_state(fwu_state_ready);
-        dbg_printf("# Download complete\n");
+        //dbg_printf("# Download complete\n");
     }
 }
 
@@ -257,22 +257,22 @@ bool fwu_run_upgrade(void)
     do {
         fwu_state_t state = get_state();
         if (state != fwu_state_ready && state != fwu_state_upgrading) {
-            dbg_printf("# Upgrade failed: wrong state %d\n", state);
+            //dbg_printf("# Upgrade failed: wrong state %d\n", state);
             break;
         }
 
         if (!past_read_uint32(g_past, fwu_download_address, &read_address)) {
-            dbg_printf("# Upgrade failed: no dl address\n");
+            //dbg_printf("# Upgrade failed: no dl address\n");
             break;
         }
 
         if (!spiflash_read(read_address, sizeof(header), (uint8_t*) &header)) {
-            dbg_printf("# Upgrade failed: failed to read header\n");
+            //dbg_printf("# Upgrade failed: failed to read header\n");
             break;
         }
 
         if (header.magic != FWU_MAGIC) {
-            dbg_printf("# Upgrade failed: wrong magic %08x\n", header.magic);
+            //dbg_printf("# Upgrade failed: wrong magic %08x\n", header.magic);
             break;
         }
 
@@ -282,7 +282,7 @@ bool fwu_run_upgrade(void)
         set_state(fwu_state_upgrading);
 
         flash_unlock();
-        dbg_printf("# Erasing internal flash\n");
+        //dbg_printf("# Erasing internal flash\n");
         for (uint32_t addr = flash_start; addr < flash_end; addr += block_size) {
             flash_erase_page(addr);
         }
@@ -290,10 +290,10 @@ bool fwu_run_upgrade(void)
         read_address += sizeof(header);
         uint8_t block[block_size];
 
-        dbg_printf("# Flashing\n");
+        //dbg_printf("# Flashing\n");
         for (uint32_t i = 0; i < header.size; i+= block_size) {
             if (!spiflash_read(read_address, block_size, (uint8_t*) &block)) {
-                dbg_printf("# Upgrade failed: failed to read data\n");
+                //dbg_printf("# Upgrade failed: failed to read data\n");
                 flash_lock();
                 break;
             }
@@ -307,12 +307,11 @@ bool fwu_run_upgrade(void)
 
         }
         flash_lock();
-        dbg_printf("# Done!\n");
-        dbg_printf("# Crc 0x%08x..0x%08x\n", flash_start, flash_start + header.size);
+        //dbg_printf("# Done!\n");
 
         uint16_t calc_crc = crc16((uint8_t*) flash_start, header.size);
         if (calc_crc != header.crc16) {
-            dbg_printf("# CRC mismatch: header:%04x flash:%04x\n", header.crc16, calc_crc);
+            //dbg_printf("# CRC mismatch: header:%04x flash:%04x\n", header.crc16, calc_crc);
             /** @todo: handle downgrade */
             break;
         }
@@ -350,20 +349,20 @@ static fwu_state_t get_state(void)
     if (past_read_uint32(g_past, fwu_state, &temp)) {
         if (temp < fwu_state_last) {
             state = (fwu_state_t) temp;
-            dbg_printf("# Read fwu state %d\n", state);
+            //dbg_printf("# Read fwu state %d\n", state);
         } else {
             /** Should not happen */
             state = fwu_state_idle;
-            dbg_printf("# Read illegal fwu state %d\n", temp);
+            //dbg_printf("# Read illegal fwu state %d\n", temp);
         }
     }
-    dbg_printf("# State is %d\n", state);
+    //dbg_printf("# State is %d\n", state);
     return state;
 }
 
 static void set_state(fwu_state_t state)
 {
-    dbg_printf("# Setting state to %d\n", state);
+    //dbg_printf("# Setting state to %d\n", state);
     uint32_t temp = (uint32_t) state;
     if (!past_write_uint32(g_past, fwu_state, temp)) {
         /** @todo: handle past failures */
