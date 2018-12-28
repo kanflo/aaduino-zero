@@ -573,8 +573,10 @@ bool past_write_uint32(past_t *past, past_id_t id, uint32_t value)
 bool past_read_uint32(past_t *past, past_id_t id, uint32_t *value)
 {
     uint32_t length;
-    if (past_read_unit(past, id, (const void**)value, &length)) {
+    uint32_t *temp;
+    if (past_read_unit(past, id, (const void**)&temp, &length)) {
         if (length == sizeof(uint32_t)) {
+            *value = *temp;
             return true;
         }
     }
