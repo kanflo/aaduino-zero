@@ -368,6 +368,7 @@ int main(void)
 {
     uint32_t magic = 0, temp = 0;
     bool enter_upgrade = false;
+    bool has_flash;
 #if 0
     void *data;
     uint32_t length;
@@ -377,10 +378,7 @@ int main(void)
     hw_init(&rx_buf);
     hw_spi_init();
     fwu_init(&g_past);
-
-    if (!spiflash_probe()) {
-        halt(2);
-    }
+    has_flash = spiflash_probe();
 
     do {
         g_past.blocks[0] = (uint32_t) &past_start;
@@ -400,7 +398,7 @@ int main(void)
                 fw_crc16 = temp & 0xffff;
                 enter_upgrade = true;
                 reason = reason_bootcom;
-            } else if (magic == FWU_MAGIC) {
+            } else if (magic == FWU_MAGIC && has_flash) {
                 (void) fwu_run_upgrade();
             }
             break;
