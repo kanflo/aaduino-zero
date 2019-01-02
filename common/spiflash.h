@@ -86,5 +86,19 @@ bool spiflash_erase(uint32_t address, uint32_t length);
  */
 bool spiflash_chip_erase(void);
 
+/**
+ * @brief      Tell flash to go to sleep
+ *
+ * @return     void
+ */
+void spiflash_sleep(void);
+
+/**
+ * @brief      Tell flash to wake up
+ *
+ * @return     void
+ */
+void spiflash_wakeup(void);
+
 
 #endif // __SPIFLASH_H__

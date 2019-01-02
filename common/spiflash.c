@@ -261,6 +261,31 @@ bool spiflash_chip_erase(void)
 }
 
 /**
+ * @brief      Tell flash to go to sleep
+ *
+ * @return     void
+ */
+void spiflash_sleep(void)
+{
+    cs_assert(true);
+    (void) spi_xfer(SPI1, 0x79); /** Ultra deep power down, 400nA */
+    cs_assert(false);
+}
+
+/**
+ * @brief      Tell flash to wake up
+ *
+ * @return     void
+ */
+void spiflash_wakeup(void)
+{
+    cs_assert(true);
+    /** Wake from deep power down, also works for ultra deep */
+    (void) spi_xfer(SPI1, 0xab);
+    cs_assert(false);
+}
+
+/**
  * @brief      Assert or deassert CS
  *
  * @param[in]  assert  ...
