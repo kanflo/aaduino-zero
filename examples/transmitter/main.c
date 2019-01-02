@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include "cli.h"
 #include "dbg_printf.h"
+#include "rtcdrv.h"
+#include "lowpower.h"
 #include "hw.h"
 #include "tick.h"
 #include "tmp102.h"
@@ -64,10 +66,13 @@ static void blinken_halt(uint32_t blink_count)
 int main(void)
 {
     uint32_t counter = 0;
-    uint32_t period = 10;
+    uint32_t period = 30;
     hw_init(0);
     dbg_printf("\n\nWelcome to the AAduino Zero Transmitter Example\n");
     (void) tmp102_init();
+
+    rtcdrv_init();
+    rtcdrv_set_wakeup(1);
 
     rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
     rfm69_reset();
@@ -107,16 +112,18 @@ int main(void)
         if (frac < 0) {
             frac = -frac;
         }
-        dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
         hw_set_led(true);
+        dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
+        hw_set_led(false);
         if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");
         }
-        hw_set_led(false);
-        // TODO: Use low power sleep ;)
-        delay_ms(period * 1000);
+
+        dbg_printf("Sleeping\n");
+        lp_sleep(period);
+        dbg_printf("*yawn*\n");
         counter++;
     }
     return 0;

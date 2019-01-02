@@ -12,6 +12,9 @@ OBJS = \
 	$(COMMON)/tmp102.o \
 	$(COMMON)/rfm69.o \
 	$(COMMON)/rfm69_link.o \
+	$(COMMON)/lowpower.o \
+	$(COMMON)/spiflash.o \
+	$(COMMON)/rtcdrv.o \
 	$(COMMON)/hw.o \
 	$(COMMON)/event.o \
 	$(COMMON)/ringbuf.o \
