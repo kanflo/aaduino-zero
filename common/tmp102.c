@@ -58,29 +58,29 @@ float tmp102_readTempC(void)
     int16_t digitalTemp;
 
     if (!i2c_read_reg16(TMP102_ADDRESS, TEMPERATURE_REG, (uint16_t*) &temp)) {
-       return 0;
+           return 0;
     } else {
-    if(extended) {
-        // Combine bytes to create a signed int
-        digitalTemp = ((temp>>8) << 5) | ((temp&0xff) >> 3);
-        // Temperature data can be + or -, if it should be negative,
-        // convert 13 bit to 16 bit and use the 2s compliment.
-        if(digitalTemp > 0xFFF) {
-            digitalTemp |= 0xE000;
-        }
-    } else {
-        // Combine bytes to create a signed int 
-        digitalTemp = ((temp>>8) << 4) | ((temp&0xff) >> 4);
-        // Temperature data can be + or -, if it should be negative,
-        // convert 12 bit to 16 bit and use the 2s compliment.
-        if(digitalTemp > 0x7FF) {
-            digitalTemp |= 0xF000;
+        if (extended) {
+            // Combine bytes to create a signed int
+            digitalTemp = ((temp>>8) << 5) | ((temp&0xff) >> 3);
+            // Temperature data can be + or -, if it should be negative,
+            // convert 13 bit to 16 bit and use the 2s compliment.
+            if (digitalTemp > 0xFFF) {
+                digitalTemp |= 0xE000;
+            }
+        } else {
+            // Combine bytes to create a signed int
+            digitalTemp = ((temp>>8) << 4) | ((temp&0xff) >> 4);
+            // Temperature data can be + or -, if it should be negative,
+            // convert 12 bit to 16 bit and use the 2s compliment.
+            if (digitalTemp > 0x7FF) {
+                digitalTemp |= 0xF000;
+            }
         }
     }
-  }
 
-  // Convert digital reading to analog temperature (1-bit is equal to 0.0625 C)
-  return digitalTemp*0.0625;
+    // Convert digital reading to analog temperature (1-bit is equal to 0.0625 C)
+    return digitalTemp*0.0625;
 }
 
 // Converts readTempC result to degrees F
