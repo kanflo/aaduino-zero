@@ -176,7 +176,7 @@ def handle_response(command, frame, args):
     return ret_dict
 
 """
-Communicate with the DPS device according to the user's whishes
+Communicate with the AAduino Zero according to the user's whishes
 """
 def communicate(comms, frame, args):
     bytes = frame.get_frame()
@@ -206,7 +206,7 @@ def communicate(comms, frame, args):
         return handle_response(frame.get_frame()[1], f, args)
 
 """
-Communicate with the DPS device according to the user's whishes
+Handle commands
 """
 def handle_commands(args):
     comms = create_comms(args)
@@ -346,11 +346,11 @@ def main():
     global args
     testing = '--testing' in sys.argv
     parser = argparse.ArgumentParser(description='Flash an AAduino Zero device')
-    parser.add_argument('-d', '--device', help="/dev/tty device to connect to. If omitted, dpsctl.py will try the environment variable AZPORT", default='')
+    parser.add_argument('-d', '--device', help="/dev/tty device to connect to. If omitted, azctl will try the environment variable AZPORT", default='')
     parser.add_argument('-p', '--ping', action='store_true', help="Ping device")
     parser.add_argument('-v', '--verbose', action='store_true', help="Verbose communications")
     parser.add_argument('-u', '--upgrade', type=str, dest="firmware", help="Flash an application")
-    parser.add_argument('-f', '--force', action='store_true', help="Force upgrade even if dpsctl complains about the firmware")
+    parser.add_argument('-f', '--force', action='store_true', help="Force upgrade even if azctl complains about the firmware")
     parser.add_argument('-F', '--fwu', type=str, dest="fwu", help="Download FWU image, if zeroboot is build with support for it")
     parser.add_argument('-U', '--runfwu', action='store_true', help="Run FWU")
     args, unknown = parser.parse_known_args()
