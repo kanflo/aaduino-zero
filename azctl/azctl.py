@@ -345,13 +345,13 @@ Ye olde main
 def main():
     global args
     testing = '--testing' in sys.argv
-    parser = argparse.ArgumentParser(description='Instrument an OpenDPS device')
-    parser.add_argument('-d', '--device', help="OpenDPS device to connect to. Can be a /dev/tty device or an IP number. If omitted, dpsctl.py will try the environment variable DPSIF", default='')
-    parser.add_argument('-p', '--ping', action='store_true', help="Ping device (causes screen to flash)")
+    parser = argparse.ArgumentParser(description='Flash an AAduino Zero device')
+    parser.add_argument('-d', '--device', help="/dev/tty device to connect to. If omitted, dpsctl.py will try the environment variable AZPORT", default='')
+    parser.add_argument('-p', '--ping', action='store_true', help="Ping device")
     parser.add_argument('-v', '--verbose', action='store_true', help="Verbose communications")
-    parser.add_argument('-u', '--upgrade', type=str, dest="firmware", help="Perform upgrade of OpenDPS firmware")
+    parser.add_argument('-u', '--upgrade', type=str, dest="firmware", help="Flash an application")
     parser.add_argument('-f', '--force', action='store_true', help="Force upgrade even if dpsctl complains about the firmware")
-    parser.add_argument('-F', '--fwu', type=str, dest="fwu", help="Download FWU image")
+    parser.add_argument('-F', '--fwu', type=str, dest="fwu", help="Download FWU image, if zeroboot is build with support for it")
     parser.add_argument('-U', '--runfwu', action='store_true', help="Run FWU")
     args, unknown = parser.parse_known_args()
     try:
