@@ -93,13 +93,28 @@ float tmp102_readTempF(void)
 // Switch sensor to low power mode
 void tmp102_sleep(void)
 {
-    /** @todo */
+    uint16_t config = 0;
+    (void) i2c_read_reg16(TMP102_ADDRESS, CONFIG_REG, &config);
+    if (config) {
+        /** Set SD bit for shutdown. Note to future data sheet writers: when
+         *  talking about 16 bit registers, please name the bits 15..0 as
+         *  "Byte 1" and "Byte 2" makes little sense to me. Thank you.
+         */
+        config |= 1 << 8;
+        (void) i2c_write_reg16(TMP102_ADDRESS, CONFIG_REG, config);
+    }
 }
 
 // Wakeup and start running in normal power mode
 void tmp102_wakeup(void)
 {
-    /** @todo */
+    uint16_t config = 0;
+    (void) i2c_read_reg16(TMP102_ADDRESS, CONFIG_REG, &config);
+    if (config) {
+        /** Clear SD bit to wake up */
+        config &= ~(1 << 8);
+        (void) i2c_write_reg16(TMP102_ADDRESS, CONFIG_REG, config);
+    }
 }
 
 // Returns state of Alert register
