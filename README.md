@@ -2,23 +2,11 @@
 
 The AAduino Zero ([blog post](https://johan.kanflo.com/the-aaduino-zero/)) is the successor of the AAduino and is still the same size as an AA battery. This repo contains software for the AAduino Zero and will eventually hold the hardware schematics.
 
-### Example code
+<p align="center">
+<img src="https://raw.githubusercontent.com/kanflo/aaduino-zero/master/aadunio-zero.png" alt="Lots of AAduino Zeros!"/>
+</p>
 
-The [transmitter](https://github.com/kanflo/aaduino-zero/tree/master/examples/transmitter) makes a temperature and battery voltage reading every 10 seconds and transmits this to a gateway or AAduino Zero running the receiver example:
-
-```
-[0] Temperature is 23.6°C, vcc is 3.40V
- Ack RSSI -26
-```
-
-The [receiver](https://github.com/kanflo/aaduino-zero/tree/master/examples/receiver) listens for incoming temperature/voltage reports and prints those:
-
-```
-From node 42: temperature:23.8°C, vcc:3.40V, rssi:-27
-```
-
-It also sends an ack to the transmitter to let it know the report was received. This is the ```ASCK RSSI``` print in the transmitter example.
-
+There's lots of [example code](https://github.com/kanflo/aaduino-zero/tree/master/examples) available, and a simple [serial tool](https://github.com/kanflo/aaduino-zero/tree/azctl) for flashing these.
 
 ### AAduino Zero specs
 
