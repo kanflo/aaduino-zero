@@ -6,7 +6,7 @@ ram_base = 0x20000000;
 ram_size   = 8k;
 
 boot_size = 8k; /* Will change as the bootloader is implemented and optimized */
-bootcom_size = 16;
+bootcom_size = 64;
 vector_size = 336;
 past_start = 0x08080000; /** EEPROM */
 past_block_size = 1024;
@@ -34,9 +34,9 @@ SECTIONS {
      } >past
     
     .bootcom : {
-        _bootcom_start = .;
+        bootcom_start = .;
         . = . + bootcom_size;
-        _bootcom_end = .;
+        bootcom_end = .;
      } >bootcom_ram
 
    .ram_vect : {
