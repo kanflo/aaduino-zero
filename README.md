@@ -6,7 +6,7 @@ The AAduino Zero ([blog post](https://johan.kanflo.com/the-aaduino-zero/)) is th
 <img src="https://raw.githubusercontent.com/kanflo/aaduino-zero/master/aadunio-zero.png" alt="Lots of AAduino Zeros!"/>
 </p>
 
-There's lots of [example code](https://github.com/kanflo/aaduino-zero/tree/master/examples) available, and a simple [serial tool](https://github.com/kanflo/aaduino-zero/tree/azctl) for flashing these.
+There's lots of [example code](https://github.com/kanflo/aaduino-zero/tree/master/examples) available, and a simple [serial tool](https://github.com/kanflo/aaduino-zero/tree/master/azctl) for flashing these.
 
 ### AAduino Zero specs
 
