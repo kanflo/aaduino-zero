@@ -366,13 +366,17 @@ static void handle_frame(uint8_t *frame, uint32_t length)
   */
 int main(void)
 {
-    uint32_t magic = 0, temp = 0;
     bool enter_upgrade = false;
     bool has_flash;
 #if 0
     void *data;
     uint32_t length;
 #endif
+
+    /** App crashed, start immediately and let it deal with it */
+    if (bootcom_get_size() > 0 && bootcom_get(0) == 0xdeadc0de) {
+        (void) start_app();
+    }
 
     ringbuf_init(&rx_buf, (uint8_t*) buffer, sizeof(buffer));
     hw_init(&rx_buf);
@@ -391,13 +395,16 @@ int main(void)
             break;
         }
 
-        if (bootcom_get(&magic, &temp)) {
+        if (bootcom_get_size() > 0) {
+            uint32_t magic = bootcom_get(0);
             /** We got invoked by the app */
             if (magic == 0xfedebeda) {
+                uint32_t temp = bootcom_get(1);
                 chunk_size = temp >> 16;
                 fw_crc16 = temp & 0xffff;
                 enter_upgrade = true;
                 reason = reason_bootcom;
+                bootcom_clear();
             } else if (magic == FWU_MAGIC && has_flash) {
                 (void) fwu_run_upgrade();
             }
