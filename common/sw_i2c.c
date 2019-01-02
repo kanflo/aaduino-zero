@@ -230,3 +230,17 @@ bool i2c_read_reg16(uint8_t slave_addr, uint8_t reg, uint16_t *val)
     *val = r[0] << 8 | r[1];
     return true;
 }
+
+bool i2c_write_reg16(uint8_t slave_addr, uint8_t reg, uint16_t val)
+{
+    sw_i2c_start();
+    if (!sw_i2c_write(slave_addr << 1)) {
+        dbg_printf("Write 1 failed\n");
+        return false;
+    }
+    sw_i2c_write(reg);
+    sw_i2c_write((val >> 8) & 0xff);
+    sw_i2c_write( val       & 0xff);
+    sw_i2c_stop();
+    return true;
+}
