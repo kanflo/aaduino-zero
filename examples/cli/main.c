@@ -41,12 +41,8 @@
 #include "spiflash.h"
 #include "past.h"
 #include "pastunits.h"
+#include "lowpower.h"
 #include "libopencm3-additions.h"
-
-/** Running in low power mode is experimental and will make attaching via the
- * BMP fail which can be fixed by returning to normal power mode.
- */
-static bool low_power = false;
 
 static past_t g_past;
 
@@ -77,7 +73,6 @@ static void temperature_handler(uint32_t argc, char *argv[]);
 static void temperature_alert_handler(uint32_t argc, char *argv[]);
 static void rfm_handler(uint32_t argc, char *argv[]);
 static void rtc_handler(uint32_t argc, char *argv[]);
-static void power_handler(uint32_t argc, char *argv[]);
 static void sleep_handler(uint32_t argc, char *argv[]);
 static void vcc_handler(uint32_t argc, char *argv[]);
 static void spiflash_handler(uint32_t argc, char *argv[]);
@@ -164,13 +159,6 @@ cli_command_t commands[] = {
         .min_arg = 0, .max_arg = 5,
         .help = "Handle RTC",
         .usage = "[set <h> <m> <s>]"
-    },
-    {
-        .cmd = "power",
-        .handler = power_handler,
-        .min_arg = 1, .max_arg = 1,
-        .help = "Handle low power mode",
-        .usage = "<low | normal>"
     },
     {
         .cmd = "sleep",
@@ -466,42 +454,14 @@ static void rtc_handler(uint32_t argc, char *argv[])
     }
 }
 
-static void power_handler(uint32_t argc, char *argv[])
-{
-    (void) argc;
-    if (strcmp(argv[1], "low") == 0) {
-        systick_deinit();
-        low_power = true;
-        dbg_printf("OK\n");
-    } else if (strcmp(argv[1], "normal") == 0) {
-        systick_init();
-        dbg_printf("OK\n");
-        low_power = false;
-    } else {
-        dbg_printf("Error: illegal argument\n");
-    }
-}
-
 static void sleep_handler(uint32_t argc, char *argv[])
 {
     (void) argc;
     uint32_t time_s = atoi(argv[1]);
-    rtcdrv_set_wakeup(time_s);
-    /** Sleep peripherals */
-    systick_deinit();
-    rfm69_sleep();
-    tmp102_sleep();
-    /** @todo: Tristate UART pins */
-    /** @todo: Tristate SPI pins */
-    /** @todo: Tristate I2C pins */
-
-    hw_stop_mode();
-    /** Yawn */
+    dbg_printf("Entering stop mode for %ds\n", time_s);
+    lp_sleep(time_s);
+    dbg_printf("OK\n", time_s);
     rtcdrv_set_wakeup(DEFAULT_RTC_WAKEUP_S);
-
-    /** Wake peripherals */
-    systick_init();
-    tmp102_wakeup();
 }
 
 static void vcc_handler(uint32_t argc, char *argv[])
@@ -766,10 +726,6 @@ int main(void)
                 dbg_printf("%c", b & 0xff);
                 line[i++] = b;
             }
-        }
-        if (low_power) {
-            hw_stop_mode();
-            dbg_printf(".");
         }
     }
     return 0;

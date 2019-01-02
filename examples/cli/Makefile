@@ -3,7 +3,7 @@ BINARY = main
 LOWPOWER := 0
 ROOT = $(shell git rev-parse --show-toplevel)
 COMMON = $(ROOT)/common
-CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE -DCONFIG_RAM_VECTORS
+CFLAGS = -I. -I$(COMMON) -DCONFIG_COMMANDLINE -DCONFIG_RAM_VECTORS -DCONFIG_PAST_MINIMAL
 
 ifeq ($(LOWPOWER),1)
   # Run in low power mode (experimental!)
@@ -33,7 +33,8 @@ OBJS = \
 	$(COMMON)/tick.o \
 	$(COMMON)/dbg_printf.o \
 	$(COMMON)/mini-printf.o \
-	$(COMMON)/libopencm3-additions.o
+	$(COMMON)/libopencm3-additions.o \
+	$(COMMON)/lowpower.o
 
 
 include $(ROOT)/libopencm3.target.mk

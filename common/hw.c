@@ -60,7 +60,6 @@ static void exti_init(void);
 static void i2c_init(void);
 #endif // CONFIG_SKIP_I2C
 static void spi_init(void);
-static void adc_init(void);
 static void lse_init(void);
 //static void button_irq_init(void);
 
@@ -156,16 +155,6 @@ void adc_disable(void)
     adc_power_off(ADC1);
 }
 
-
-/**
-  * @brief Check if SEL button is pressed
-  * @retval true if SEL button is pressed, false otherwise
-  */
-//bool hw_sel_button_pressed(void)
-//{
-//    return !gpio_get(BUTTON_SEL_PORT, BUTTON_SEL_PIN);
-//}
-
 /**
   * @brief Enable clocks
   * @retval None
@@ -220,7 +209,7 @@ static void clock_init(void)
     rcc_osc_off(RCC_PLL);
     while (rcc_is_osc_ready(RCC_PLL));
     flash_prefetch_enable();
-    flash_set_ws(0);
+    flash_set_ws(1);
 
     /** @todo: Add mode for 4MHz HSI16 mode */
 
@@ -471,7 +460,7 @@ static void button_irq_init(void)
   * @brief Initialize the ADC for vref int messurements
   * @retval None
   */
-static void adc_init(void)
+void adc_init(void)
 {
     rcc_peripheral_enable_clock(&RCC_APB2ENR, RCC_APB2ENR_ADC1EN);
     adc_power_off(ADC1);
@@ -503,11 +492,11 @@ static void lse_init(void)
         protected after reset, the DBP bit in the Power control register
         (PWR_CR) has to be set to be able to modify them. Refer to
         Section 6.1.2: RTC and RTC backup registers for further information.
-        
+
         These bits are only reset after a RTC domain reset (see Section 6.1.2).
         Any internal or external reset does not have any effect on them.
     */
-    
+
     // Allow change or LSE drive strength
     RCC_APB1ENR |= RCC_APB1ENR_PWREN;
     PWR_CR |= PWR_CR_DBP;
@@ -525,21 +514,4 @@ static void lse_init(void)
     } else {
         dbg_printf("LSE failed to start! (drive strength %d)\n", (RCC_CSR >> RCC_CSR_LSEDRV_SHIFT) & RCC_CSR_LSEDRV_MASK);
     }
-}
-
-/**
- * @brief      Enter low stop mode and wait for interrupt
- */
-void hw_stop_mode(void)
-{
-    /** @todo: check if this is the right way to do it */
-
-    /** 6.4.1: If ULP=1 and FWU = 0: Exiting from low-power mode occurs only
-     * when the VREFINT is ready */
-    PWR_CR &= ~PWR_CR_FWU;
-    PWR_CR |= ~PWR_CR_ULP;
-
-    PWR_CR |= PWR_CR_LPSDSR;
-    pwr_set_stop_mode();
-    __WFI();
 }

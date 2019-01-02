@@ -1,7 +1,7 @@
 /*
  * The MIT License (MIT)
  *
- * Copyright (c) 2017 Johan Kanflo (github.com/kanflo)
+ * Copyright (c) 2019 Johan Kanflo (github.com/kanflo)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,45 +22,18 @@
  * THE SOFTWARE.
  */
 
-#ifndef __HW_H__
-#define __HW_H__
+#ifndef __LOWPOWER_H__
+#define __LOWPOWER_H__
 
 #include <stdint.h>
-#include <stdbool.h>
-#include <gpio.h>
-#include "ringbuf.h"
-#include "pindefs.h"
-
 
 /**
-  * @brief Initialize the hardware
-  * @retval None
-  */
-void hw_init(ringbuf_t *usart_rx_buf);
+ * @brief      Enter stop mode and sleep for specified time.
+ *             Wake up using the RTC
+ *
+ * @param[in]  time_s  Time to sleep in seconds.
+ */
+void lp_sleep(uint32_t time_s);
 
-/**
-  * @brief Initialize the hardware
-  * @param on Turn on if, well, on
-  * @retval None
-  */
-void hw_set_led(bool on);
 
-/**
-  * @brief Measure vcc
-  * @retval vcc in millivolts
-  */
-uint16_t vcc_measure(void);
-
-/**
-  * @brief Disable ADC
-  * @retval None
-  */
-void adc_disable(void);
-
-/**
-  * @brief Initialize the ADC for vref int messurements
-  * @retval None
-  */
-void adc_init(void);
-
-#endif // __HW_H__
+#endif // __LOWPOWER_H__
