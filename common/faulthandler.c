@@ -74,5 +74,5 @@ void __attribute__((naked)) hard_fault_handler(void)
         : /* no output */
         : /* no input */
         : "r0" /* clobber */
-    );  
+    );
 }
