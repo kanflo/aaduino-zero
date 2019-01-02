@@ -1,18 +1,18 @@
-/* 
+/*
  * The MIT License (MIT)
- * 
- * Copyright (c) 2018 Johan Kanflo (github.com/kanflo)
- * 
+ *
+ * Copyright (c) 2019 Johan Kanflo (github.com/kanflo)
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -32,46 +32,97 @@
  *  CRC covering the magic and the data.
  */
 
-/** If this magic is found at _bootcom_start, we have bootcom data.
- *  Falafels are yummy!
+/** If this magic is found at bootcom_start and the crc is valid, we have
+ *  bootcom data. Falafels are yummy!
  */
 #define BOOTCOM_MAGIC (0xfa1afe15)
 
 /** Linker symbols */
-extern uint32_t *_bootcom_start;
-extern uint32_t *_bootcom_end;
+extern uint32_t *bootcom_start;
+extern uint32_t *bootcom_size;
+
+typedef enum {
+    bc_magic = 0,
+    bc_crc16,
+    bc_nwords
+} bc_index_t;
 
 /**
-  * @brief Put data into bootcom buffer and set the bootcom magic
-  * @param w1, w2 data to place into buffer
+ * The bootcom areas has the following layout:
+ * bootcom_start[0] BOOTCOM_MAGIC
+ * bootcom_start[1] crc16 of bootcom_start[2]..bootcom_start[2+num_words]
+ * bootcom_start[2] Number of words stored
+ * bootcom_start[3] User word 0
+ * bootcom_start[4] User word 1
+ *       ...
+ *
+ */
+
+
+
+/**
+  * @brief Clear bootcom area
   * @retval void
   */
-void bootcom_put(uint32_t w1, uint32_t w2)
+void bootcom_clear(void)
 {
-    uint32_t *bootcom = (uint32_t*) &_bootcom_start;
-    bootcom[0] = BOOTCOM_MAGIC;
-    bootcom[1] = w1;
-    bootcom[2] = w2;
-    bootcom[3] = crc16((uint8_t*) bootcom, 12);
+    uint32_t *bootcom = (uint32_t*) &bootcom_start;
+    bootcom[bc_magic] = BOOTCOM_MAGIC;
+    bootcom[bc_crc16] = 0;
+    bootcom[bc_nwords] = 0;
+
 }
 
 /**
-  * @brief Get data from bootcom buffer
-  * @param w1, w2 pointers to place bootcom data info
-  * @retval true if bootcom data was found, false otherwise
+  * @brief Put data into bootcom buffer and update buffer crc
+  * @param data data to place into next position of buffer. Places no data if
+  *             bootcom is full.
+  * @retval void
   */
-bool bootcom_get(uint32_t *w1, uint32_t *w2)
+void bootcom_put(uint32_t data)
 {
-    bool success = false;
-    uint32_t *bootcom = (uint32_t*) &_bootcom_start;
-    if (w1 && w2 && bootcom[0] == BOOTCOM_MAGIC) {
-        if (bootcom[3] == crc16((uint8_t*) bootcom, 12)) {
-            *w1 = bootcom[1];
-            *w2 = bootcom[2];
-            bootcom[0] = bootcom[1] = bootcom[2] = bootcom[3] = 0;
-            success = true;
+    uint32_t *bootcom = (uint32_t*) &bootcom_start;
+    if (bootcom[bc_magic] == BOOTCOM_MAGIC) {
+        uint32_t num_words = bootcom[bc_nwords];
+        /** BC overhead is 3 words */
+        uint32_t max_words = (((uint32_t) &bootcom_size) >> 2) - 3;
+        if (num_words < max_words) {
+            /** User data starts at [2] */
+            bootcom[bc_nwords+1 + num_words] = data;
+            bootcom[bc_nwords] = num_words + 1;
+            /** crc covers word counter and user data */
+            bootcom[bc_crc16] = crc16((uint8_t*) &bootcom[2], 4 + 4*num_words);
+        } else {
+
         }
     }
-	return success;
 }
 
+/**
+ * @brief Check if we have bootcom, return length in words
+ *
+ * @return number of words in bootcom. 0 if no data exists
+ */
+uint32_t bootcom_get_size(void)
+{
+    uint32_t max_words = (((uint32_t) &bootcom_size) >> 2) - 3;
+    uint32_t *bootcom = (uint32_t*) &bootcom_start;
+    if (bootcom[bc_magic] == BOOTCOM_MAGIC &&
+        bootcom[bc_nwords] <= max_words &&
+        bootcom[bc_crc16] != crc16((uint8_t*) &bootcom[bc_nwords], 4 + 4*bootcom[bc_nwords]))
+        return bootcom[bc_nwords];
+    else
+        return 0;
+}
+
+/**
+  * @brief Get data from bootcom buffer. Assumes user has validated using
+  *        bootcom_size() so index is valid
+  * @param index, index of data
+  * @retval data at location
+  */
+uint32_t bootcom_get(uint8_t index)
+{
+    uint32_t *bootcom = (uint32_t*) &bootcom_start;
+    return bootcom[bc_nwords+1 + index];
+}
