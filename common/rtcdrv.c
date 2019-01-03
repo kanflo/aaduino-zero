@@ -33,6 +33,8 @@
 
 
 static uint32_t rtc_wakeup_counter = 0;
+static uint32_t rtc_wakeup_period;
+static uint32_t rtc_time = 0;
 
 /** As of libopencm3 #1155c056, these are missing from rtc_common_l1f024.h  */
 #ifndef RTC_PM_SHIFT
@@ -51,6 +53,7 @@ void rtc_isr(void)
 //    PWR_CR |= PWR_CR_CWUF;
     exti_reset_request(EXTI20);
     rtc_wakeup_counter++;
+    rtc_time += rtc_wakeup_period;
 }
 
 /**
@@ -105,6 +108,7 @@ void rtcdrv_init(void)
  */
 void rtcdrv_set_wakeup(uint16_t period_s)
 {
+    rtc_wakeup_period = period_s;
     exti_enable_request(EXTI20);
     exti_set_trigger(EXTI20, EXTI_TRIGGER_RISING);
 
@@ -184,4 +188,15 @@ void rtcdrv_get_time(uint8_t *h, uint8_t *m, uint8_t *s, bool *pm)
     if (pm) {
         *pm = (tr >> RTC_PM_SHIFT) & RTC_PM_MASK;
     }
+}
+
+/**
+ * @brief      Return the elapsed number of seconds since the RTC driver init
+ *
+ * @return     see above ;)
+ */
+uint32_t rtc_drv_get_secs(void)
+{
+    return rtc_time;
+
 }

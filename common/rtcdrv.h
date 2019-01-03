@@ -67,4 +67,11 @@ void rtcdrv_set_time(uint8_t h, uint8_t m, uint8_t s);
  */
 void rtcdrv_get_time(uint8_t *h, uint8_t *m, uint8_t *s, bool *pm);
 
+/**
+ * @brief      Return the elapsed number of seconds since the RTC driver init
+ *
+ * @return     see above ;)
+ */
+uint32_t rtc_drv_get_secs(void);
+
 #endif // __RTCDRV_H__
