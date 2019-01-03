@@ -59,6 +59,7 @@ static void check_crash(void)
             dbg_printf("lr    : 0x%08x\n", bootcom_get(6));
             dbg_printf("pc    : 0x%08x\n", bootcom_get(7));
             dbg_printf("psr   : 0x%08x\n", bootcom_get(8));
+            dbg_printf("uptime  %ds\n", rtc_drv_get_secs(9));
             bootcom_clear();
             dbg_printf("\nHalting\n");
             blinken_halt(2);
