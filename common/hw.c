@@ -53,7 +53,7 @@ static void copy_vectors(void);
 
 static void tim2_init(void);
 static void clock_init(void);
-static void usart_init(void);
+static void usart_init(bool enable_rx);
 static void gpio_init(void);
 static void exti_init(void);
 #ifndef CONFIG_SKIP_I2C
@@ -92,7 +92,7 @@ void hw_init(ringbuf_t *usart_rx_buf)
     clock_init();
     systick_init();
     gpio_init();
-    usart_init();
+    usart_init(usart_rx_buf != 0);
     exti_init();
     tim2_init();
 #ifndef CONFIG_SKIP_I2C
@@ -332,9 +332,10 @@ static void spi_init(void)
 
 /**
   * @brief Initialize USART1
+  * @param enable_rx if true, enable USART RX
   * @retval None
   */
-static void usart_init(void)
+static void usart_init(bool enable_rx)
 {
     /* Setup USART1 parameters. */
     rcc_periph_clock_enable(RCC_USART1);
@@ -342,11 +343,13 @@ static void usart_init(void)
     usart_set_databits(USART1, 8);
     usart_set_parity(USART1, USART_PARITY_NONE);
     usart_set_stopbits(USART1, USART_CR2_STOPBITS_1);
-    usart_set_mode(USART1, USART_MODE_TX_RX); // USART_MODE_TX);
     usart_set_flow_control(USART1, USART_FLOWCONTROL_NONE);
     usart_enable(USART1);
-    nvic_enable_irq(NVIC_USART1_IRQ);
-    usart_enable_rx_interrupt(USART1);
+    if (enable_rx) {
+        usart_set_mode(USART1, USART_MODE_TX_RX);
+        nvic_enable_irq(NVIC_USART1_IRQ);
+        usart_enable_rx_interrupt(USART1);
+    }
     dbg_printf("\n---\n");
 }
 
@@ -359,7 +362,7 @@ void usart1_isr(void)
         if ((USART_ISR(USART1) & USART_ISR_ORE) == 0 &&
             (USART_ISR(USART1) & USART_ISR_FE) == 0 &&
             (USART_ISR(USART1) & USART_ISR_PE) == 0) {
-            if (!ringbuf_put(rx_buf, ch)) {
+            if (rx_buf && !ringbuf_put(rx_buf, ch)) {
                 //printf("ASSERT:usart1_isr:%d\n", __LINE__);
             }
         } else {
