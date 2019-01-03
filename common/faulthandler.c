@@ -26,14 +26,27 @@
 #include <nvic.h>
 #include <scb.h>
 #include "bootcom.h"
+#include "rtcdrv.h"
 #ifdef CONFIG_VERBOSE_FAULT_HANDLER
 #include "dbg_printf.h"
 #endif // CONFIG_VERBOSE_FAULT_HANDLER
 
+/**
+ * The hard fault handler save a crash dump in the bootcom area in the following
+ * format (9x 32 bit words):
+ *
+ *   r0  r1  r2  r3  r12
+ *   lr  pc  psr uptime
+ *
+ *  Uptime in seconds, taken from the RTC driver. A node can send this
+ *  information to its gateway letting it know about the firmware health of
+ *  deployed nodes.
+ */
+
 void hard_fault_handler_c(uint32_t stack[]);
 
 /**
-  * @brief Initialize the systick module
+  * @brief Hard fault handler, save a crash dump in the bootcom area
   * @retval none
   */
 void hard_fault_handler_c(uint32_t stack[])
@@ -48,12 +61,14 @@ void hard_fault_handler_c(uint32_t stack[])
     dbg_printf("lr    : 0x%08x\n", stack[5]);
     dbg_printf("pc    : 0x%08x\n", stack[6]);
     dbg_printf("psr   : 0x%08x\n", stack[7]);
+    dbg_printf("uptime  %ds\n", rtc_drv_get_secs());
 #endif // CONFIG_VERBOSE_FAULT_HANDLER
     bootcom_clear();
     bootcom_put(0xdeadc0de);
     for (uint32_t i = 0; i < 8; i++) {
         bootcom_put(stack[i]);
     }
+    bootcom_put(rtc_drv_get_secs());
     scb_reset_system();
     while(1);
 }
