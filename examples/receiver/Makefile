@@ -16,6 +16,10 @@ OBJS = \
 	$(COMMON)/event.o \
 	$(COMMON)/ringbuf.o \
 	$(COMMON)/tick.o \
+	$(COMMON)/rtcdrv.o \
+	$(COMMON)/faulthandler.o \
+	$(COMMON)/bootcom.o \
+	$(COMMON)/crc16.o \
 	$(COMMON)/dbg_printf.o \
 	$(COMMON)/mini-printf.o
 

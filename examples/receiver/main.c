@@ -35,6 +35,7 @@
 #include "rfm69.h"
 #include "rfm69_link.h"
 #include "spiflash.h"
+#include "bootcom.h"
 
 //#define CONFIG_RX_DEBUG
 
@@ -117,6 +118,28 @@ static void dump_frame(rfm69_link_frame_t *frame, uint8_t len)
 
 
 /**
+ * @brief      Check for crash dump
+ */
+static void check_crash(void)
+{
+    if (bootcom_get_size() > 0) {
+        if (bootcom_get(0) == 0xdeadc0de) {
+            dbg_printf("\n\n**** GURU MEDITATION DETECTED ****\n");
+            dbg_printf("r0    : 0x%08x\n", bootcom_get(1));
+            dbg_printf("r1    : 0x%08x\n", bootcom_get(2));
+            dbg_printf("r2    : 0x%08x\n", bootcom_get(3));
+            dbg_printf("r3    : 0x%08x\n", bootcom_get(4));
+            dbg_printf("r12   : 0x%08x\n", bootcom_get(5));
+            dbg_printf("lr    : 0x%08x\n", bootcom_get(6));
+            dbg_printf("pc    : 0x%08x\n", bootcom_get(7));
+            dbg_printf("psr   : 0x%08x\n", bootcom_get(8));
+            dbg_printf("uptime  %ds\n", bootcom_get(9));
+            bootcom_clear();
+        }
+    }
+}
+
+/**
   * @brief Ye olde main
   * @retval preferably none
   */
@@ -142,6 +165,8 @@ int main(void)
         (void) rfm69_setAESEncryption((void*) "sampleEncryptKey", 16);
         rfm69link_setNodeId(NODE_ID);
     }
+
+    check_crash();
 
     while(1) {
         rfm69_link_frame_t frame;
