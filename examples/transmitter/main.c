@@ -39,7 +39,6 @@
 #include "spiflash.h"
 
 #define GATEWAY_ID                 (1) // Id of gateway
-#define TEMPERATURE_PACKET_SIZE   (10) // Temperature packet size
 #define MAX_PACKET_SIZE           (64) // Max size of RF packet
 
 #define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
