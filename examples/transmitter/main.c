@@ -27,7 +27,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
-#include "cli.h"
 #include "dbg_printf.h"
 #include "rtcdrv.h"
 #include "lowpower.h"
@@ -39,7 +38,6 @@
 #include "spiflash.h"
 
 #define GATEWAY_ID                 (1) // Id of gateway
-#define NODE_ID                   (42) // Id of node running this program
 #define TEMPERATURE_PACKET_SIZE   (10) // Temperature packet size
 #define MAX_PACKET_SIZE           (64) // Max size of RF packet
 
@@ -77,7 +75,7 @@ int main(void)
     rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
     rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
-        dbg_printf("No RFM69CW found\n");
+        dbg_printf("No RFM69CW found, my node id is %d\n", CONFIG_NODEID);
         blinken_halt(2);
     } else {
         dbg_printf("RFM69CW found\n");
@@ -87,7 +85,7 @@ int main(void)
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
         rfm69_setAutoReadRSSI(true);
         (void) rfm69_setAESEncryption((void*) "sampleEncryptKey", 16);
-        rfm69link_setNodeId(NODE_ID);
+        rfm69link_setNodeId(CONFIG_NODEID);
     }
 
     dbg_printf("Transmitting temperature and battery voltage every %d seconds.\n", period);

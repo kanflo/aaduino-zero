@@ -5,6 +5,10 @@ COMMON = $(ROOT)/common
 CFLAGS = -I. -I$(COMMON) -DCONFIG_RAM_VECTORS
 LDSCRIPT = $(COMMON)/stm32l052_app.ld
 
+# Set node id with 'make NODEID=xx'
+NODEID?=42
+CFLAGS += -DCONFIG_NODEID=$(NODEID)
+
 OBJS = \
 	$(COMMON)/cli.o \
 	$(COMMON)/sw_i2c.o \
