@@ -39,8 +39,9 @@
 //#define CONFIG_RX_DEBUG
 
 #define NODE_ID                    (1) // I am the gateway
-#define TEMPERATURE_PACKET_SIZE   (10) // Temperature packet size
 #define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
+#define POWERUP_FRAME_TYPE         (1) // Frame type for powerup packet
+#define FAULT_FRAME_TYPE           (2) // Frame type for hard fault packet
 
 static void blinken_halt(uint32_t blink_count)
 {
@@ -79,6 +80,25 @@ static void handle_temperature_frame(uint8_t src, uint8_t *payload, uint8_t len,
     }
 }
 
+
+/**
+  * @brief Handle fault packet
+  * @param payload Fault payload
+  * @param len Payload length
+  */
+static void handle_fault_frame(uint8_t src, uint8_t *payload, uint8_t len, int rssi)
+{
+    if (len != 3*4) {
+        dbg_printf("Illegal fault payload length %d\n", len);
+    } else {
+        //  <pc:32> <lr:32> <uptime:32>
+        int32_t pc = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | (payload[3]);
+        int32_t lr = (payload[4] << 24) | (payload[5] << 16) | (payload[6] << 8) | (payload[7]);
+        int32_t uptime = (payload[8] << 24) | (payload[9] << 16) | (payload[10] << 8) | (payload[11]);
+        dbg_printf("Node %d crashed at 0x%08x after %d seconds, ", src, pc, uptime);
+        dbg_printf("lr:0x%08x rssi:%d\n", lr, rssi);
+    }
+}
 
 /**
   * @brief Dump packet
@@ -132,10 +152,18 @@ int main(void)
             dump_frame(&frame, length);
 #endif // CONFIG_RX_DEBUG
             if (length > 0) {
+                /** Chop off frame type from payload */
+                uint8_t *payload = &frame.payload[1];
+                uint8_t payload_len = length-1;
                 switch(frame.payload[0]) {
                     case TEMPERATURE_FRAME_TYPE:
-                        /** Chop off frame type */
-                        handle_temperature_frame(src, &frame.payload[1], length-1, frame.rssi);
+                        handle_temperature_frame(src, payload, payload_len, frame.rssi);
+                        break;
+                    case POWERUP_FRAME_TYPE:
+                        dbg_printf("Node %d powered up\n", src);
+                        break;
+                    case FAULT_FRAME_TYPE:
+                        handle_fault_frame(src, payload, payload_len, frame.rssi);
                         break;
                     default:
                         dbg_printf("Unknown packet type 0x%02x\n", frame.payload[0]);
