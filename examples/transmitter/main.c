@@ -32,6 +32,7 @@
 #include "lowpower.h"
 #include "hw.h"
 #include "tick.h"
+#include "bootcom.h"
 #include "tmp102.h"
 #include "rfm69.h"
 #include "rfm69_link.h"
@@ -42,6 +43,8 @@
 #define MAX_PACKET_SIZE           (64) // Max size of RF packet
 
 #define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
+#define POWERUP_FRAME_TYPE         (1) // Frame type for powerup packet
+#define FAULT_FRAME_TYPE           (2) // Frame type for hard fault packet
 
 
 static void blinken_halt(uint32_t blink_count)
@@ -54,6 +57,76 @@ static void blinken_halt(uint32_t blink_count)
             delay_ms(100);
         }
         delay_ms(1000);
+    }
+}
+
+/**
+ * @brief      Send a powerup message to the gateway.
+ */
+static void send_powerup_frame(void)
+{
+        rfm69_link_frame_t frame;
+        uint8_t len = 0;
+        frame.payload[len++] = POWERUP_FRAME_TYPE;
+
+        dbg_printf("Sending powerup to gateway\n");
+        /** The powerup message has only a single frame type */
+        if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+            dbg_printf(" Ack RSSI %d\n", frame.rssi);
+        } else {
+            dbg_printf(" No response from gateway\n");
+        }
+
+}
+
+/**
+ * @brief      Check for crash dump, send to gateway if found
+ */
+static void check_crash(void)
+{
+    if (bootcom_get_size() > 0) {
+        if (bootcom_get(0) == 0xdeadc0de) {
+            dbg_printf("\n\n**** GURU MEDITATION DETECTED ****\n");
+            dbg_printf("r0    : 0x%08x\n", bootcom_get(1));
+            dbg_printf("r1    : 0x%08x\n", bootcom_get(2));
+            dbg_printf("r2    : 0x%08x\n", bootcom_get(3));
+            dbg_printf("r3    : 0x%08x\n", bootcom_get(4));
+            dbg_printf("r12   : 0x%08x\n", bootcom_get(5));
+            dbg_printf("lr    : 0x%08x\n", bootcom_get(6));
+            dbg_printf("pc    : 0x%08x\n", bootcom_get(7));
+            dbg_printf("psr   : 0x%08x\n", bootcom_get(8));
+            dbg_printf("uptime  %ds\n", bootcom_get(9));
+
+
+            rfm69_link_frame_t frame;
+            uint8_t len = 0;
+            frame.payload[len++] = FAULT_FRAME_TYPE;
+            uint32_t pc = bootcom_get(7);
+            uint32_t lr = bootcom_get(6);
+            uint32_t uptime = bootcom_get(9);
+            /** The crash report consists of a 1 byte frame type and the  pc and
+             *  lr registers. 9 bytes in total.
+             */
+            frame.payload[len++] = (pc >> 24) & 0xff;
+            frame.payload[len++] = (pc >> 16) & 0xff;
+            frame.payload[len++] = (pc >>  8) & 0xff;
+            frame.payload[len++] = (pc      ) & 0xff;
+            frame.payload[len++] = (lr >> 24) & 0xff;
+            frame.payload[len++] = (lr >> 16) & 0xff;
+            frame.payload[len++] = (lr >>  8) & 0xff;
+            frame.payload[len++] = (lr      ) & 0xff;
+            frame.payload[len++] = (uptime >> 24) & 0xff;
+            frame.payload[len++] = (uptime >> 16) & 0xff;
+            frame.payload[len++] = (uptime >>  8) & 0xff;
+            frame.payload[len++] = (uptime      ) & 0xff;
+            dbg_printf("Sending crash report to gateway\n");
+            if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+                dbg_printf(" Ack RSSI %d\n", frame.rssi);
+            } else {
+                dbg_printf(" No response from gateway\n");
+            }
+            bootcom_clear();
+        }
     }
 }
 
@@ -90,6 +163,9 @@ int main(void)
 
     dbg_printf("Transmitting temperature and battery voltage every %d seconds.\n", period);
 
+    send_powerup_frame();
+    check_crash();
+
     while(1) {
         // Send a frame formatted as
         //  <to:8> <from:8> <counter:8> <type:8> <temperature:32> <vcc:16>
@@ -123,6 +199,11 @@ int main(void)
         lp_sleep(period);
         dbg_printf("*yawn*\n");
         counter++;
+#if CONFIG_CRASH==1
+        /** Try the crash-reports-over-the-air feature */
+        uint32_t *a = 0;
+        *a = 0;
+#endif // CONFIG_CRASH
     }
     return 0;
 }

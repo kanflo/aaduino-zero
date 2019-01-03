@@ -7,7 +7,11 @@ LDSCRIPT = $(COMMON)/stm32l052_app.ld
 
 # Set node id with 'make NODEID=xx'
 NODEID?=42
-CFLAGS += -DCONFIG_NODEID=$(NODEID)
+
+# For testing the crash reporting feature
+CRASH?=0
+
+CFLAGS += -DCONFIG_NODEID=$(NODEID) -DCONFIG_CRASH=$(CRASH)
 
 OBJS = \
 	$(COMMON)/cli.o \
@@ -23,6 +27,9 @@ OBJS = \
 	$(COMMON)/event.o \
 	$(COMMON)/ringbuf.o \
 	$(COMMON)/tick.o \
+	$(COMMON)/faulthandler.o \
+	$(COMMON)/bootcom.o \
+	$(COMMON)/crc16.o \
 	$(COMMON)/dbg_printf.o \
 	$(COMMON)/mini-printf.o
 
