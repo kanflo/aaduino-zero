@@ -54,16 +54,33 @@ Sleeping 30s, we should consume ~8uA during sleep.
 The [receiver](https://github.com/kanflo/aaduino-zero/tree/master/examples/receiver) listens for incoming temperature/voltage reports and prints those:
 
 ```
-From node 42: temperature:23.8°C, vcc:3.40V, rssi:-27
+Welcome to the AAduino Zero Receiver Example
+TMP102 found, config is 0xe1a0 (12 bit)
+RFM69CW found
+Node 42 powered up
+From node 42: temperature:22.6°C, vcc:3.40V, rssi:-27
 ```
 
 It also sends an ack to the transmitter to let it know the report was received. This is the ```ASCK RSSI``` print in the transmitter example.
 
 ### transmitter
 
-The [transmitter](https://github.com/kanflo/aaduino-zero/tree/master/examples/transmitter) makes a temperature and battery voltage reading every 10 seconds and transmits this to a gateway or AAduino Zero running the receiver example:
+The [transmitter](https://github.com/kanflo/aaduino-zero/tree/master/examples/transmitter) makes a temperature and battery voltage reading every 30 seconds and transmits this to a gateway or AAduino Zero running the receiver example:
 
 ```
-[0] Temperature is 23.6°C, vcc is 3.40V
+Welcome to the AAduino Zero Transmitter Example
+TMP102 found, config is 0xe1a0 (12 bit)
+RFM69CW found
+Transmitting temperature and battery voltage every 30 seconds.
+Sending powerup to gateway
  Ack RSSI -26
+[0] Temperature is 22.6°C, vcc is 3.40V
+ Ack RSSI -26
+Sleeping
+```
+
+If building with `make CRASH=1` the firmware will crash after sending the temperature report. It will then restart and send a crash report to the gateway printing something like this:
+
+```
+Node 42 crashed at 0x08003b32 after 30 seconds, lr:0x080041f1 rssi:-27
 ```
