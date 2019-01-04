@@ -37,14 +37,10 @@
 #include "rfm69.h"
 #include "rfm69_link.h"
 #include "spiflash.h"
+#include "rfprotocol.h"
 
 #define GATEWAY_ID                 (1) // Id of gateway
 #define MAX_PACKET_SIZE           (64) // Max size of RF packet
-
-#define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
-#define POWERUP_FRAME_TYPE         (1) // Frame type for powerup packet
-#define FAULT_FRAME_TYPE           (2) // Frame type for hard fault packet
-
 
 static void blinken_halt(uint32_t blink_count)
 {
@@ -66,7 +62,7 @@ static void send_powerup_frame(void)
 {
         rfm69_link_frame_t frame;
         uint8_t len = 0;
-        frame.payload[len++] = POWERUP_FRAME_TYPE;
+        frame.payload[len++] = rf_powerup;
 
         dbg_printf("Sending powerup to gateway\n");
         /** The powerup message has only a single frame type */
@@ -99,7 +95,7 @@ static void check_crash(void)
 
             rfm69_link_frame_t frame;
             uint8_t len = 0;
-            frame.payload[len++] = FAULT_FRAME_TYPE;
+            frame.payload[len++] = rf_hard_fault;
             uint32_t pc = bootcom_get(7);
             uint32_t lr = bootcom_get(6);
             uint32_t uptime = bootcom_get(9);
@@ -128,18 +124,6 @@ static void check_crash(void)
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 /**
   * @brief Ye olde main
@@ -187,7 +171,7 @@ int main(void)
 
         rfm69_link_frame_t frame;
         uint8_t len = 0;
-        frame.payload[len++] = TEMPERATURE_FRAME_TYPE;
+        frame.payload[len++] = rf_temperature;
         frame.payload[len++] = (t >> 24) & 0xff;
         frame.payload[len++] = (t >> 16) & 0xff;
         frame.payload[len++] = (t >>  8) & 0xff;

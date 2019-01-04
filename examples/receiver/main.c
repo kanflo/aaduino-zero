@@ -37,12 +37,9 @@
 #include "spiflash.h"
 #include "rtcdrv.h"
 #include "bootcom.h"
+#include "rfprotocol.h"
 
 //#define CONFIG_RX_DEBUG
-
-#define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
-#define POWERUP_FRAME_TYPE         (1) // Frame type for powerup packet
-#define FAULT_FRAME_TYPE           (2) // Frame type for hard fault packet
 
 static void blinken_halt(uint32_t blink_count)
 {
@@ -185,13 +182,13 @@ int main(void)
                 uint8_t *payload = &frame.payload[1];
                 uint8_t payload_len = length-1;
                 switch(frame.payload[0]) {
-                    case TEMPERATURE_FRAME_TYPE:
+                    case rf_temperature:
                         handle_temperature_frame(src, payload, payload_len, frame.rssi);
                         break;
-                    case POWERUP_FRAME_TYPE:
+                    case rf_powerup:
                         dbg_printf("Node %d powered up\n", src);
                         break;
-                    case FAULT_FRAME_TYPE:
+                    case rf_hard_fault:
                         handle_fault_frame(src, payload, payload_len, frame.rssi);
                         break;
                     default:
