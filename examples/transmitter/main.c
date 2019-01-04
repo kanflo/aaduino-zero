@@ -129,6 +129,18 @@ static void check_crash(void)
     }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
 /**
   * @brief Ye olde main
   * @retval preferably none
@@ -138,20 +150,19 @@ int main(void)
     uint32_t counter = 0;
     uint32_t period = 30;
     hw_init(0);
-    dbg_printf("\n\nWelcome to the AAduino Zero Transmitter Example\n");
-    (void) tmp102_init();
 
+    dbg_printf("\n\nWelcome to the AAduino Zero Transmitter Example\n");
+
+    (void) tmp102_init();
     rtcdrv_init();
     rtcdrv_set_wakeup(1);
-
     rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
     rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
-        dbg_printf("No RFM69CW found, my node id is %d\n", CONFIG_NODEID);
+        dbg_printf("No RFM69CW found\n");
         blinken_halt(2);
     } else {
-        dbg_printf("RFM69CW found\n");
-
+        dbg_printf("RFM69CW found, my node id is %d\n", CONFIG_NODEID);
         rfm69_sleep(); // init RF module and put it to sleep
         rfm69_setPowerDBm(13); // // set output power, +13 dBm
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
