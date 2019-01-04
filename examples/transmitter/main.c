@@ -39,7 +39,6 @@
 #include "spiflash.h"
 #include "rfprotocol.h"
 
-#define GATEWAY_ID                 (1) // Id of gateway
 #define MAX_PACKET_SIZE           (64) // Max size of RF packet
 
 static void blinken_halt(uint32_t blink_count)
@@ -66,7 +65,7 @@ static void send_powerup_frame(void)
 
         dbg_printf("Sending powerup to gateway\n");
         /** The powerup message has only a single frame type */
-        if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");
@@ -115,7 +114,7 @@ static void check_crash(void)
             frame.payload[len++] = (uptime >>  8) & 0xff;
             frame.payload[len++] = (uptime      ) & 0xff;
             dbg_printf("Sending crash report to gateway\n");
-            if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+            if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
                 dbg_printf(" Ack RSSI %d\n", frame.rssi);
             } else {
                 dbg_printf(" No response from gateway\n");
@@ -146,7 +145,7 @@ int main(void)
         dbg_printf("No RFM69CW found\n");
         blinken_halt(2);
     } else {
-        dbg_printf("RFM69CW found, my node id is %d\n", CONFIG_NODEID);
+        dbg_printf("RFM69CW found, my node id is %d, talking to %d\n", CONFIG_NODEID, CONFIG_GATEWAYID);
         rfm69_sleep(); // init RF module and put it to sleep
         rfm69_setPowerDBm(13); // // set output power, +13 dBm
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
@@ -186,7 +185,7 @@ int main(void)
         hw_set_led(true);
         dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
         hw_set_led(false);
-        if (rfm69link_sendFrame(GATEWAY_ID, &frame, len)) {
+        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");

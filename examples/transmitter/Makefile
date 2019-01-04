@@ -8,6 +8,9 @@ LDSCRIPT = $(COMMON)/stm32l052_app.ld
 # Set node id with 'make NODEID=xx'
 NODEID?=42
 
+# Set gateway node id with 'make GATEWAYID=xx'
+GATEWAYID?=1
+
 # For testing the crash reporting feature
 CRASH?=0
 
@@ -15,6 +18,7 @@ CRASH?=0
 AESKEY=sampleEncryptKey
 
 CFLAGS += -DCONFIG_NODEID=$(NODEID) -DCONFIG_AESKEY=\"$(AESKEY)\"
+CFLAGS += -DCONFIG_GATEWAYID=$(GATEWAYID)
 CFLAGS += -DCONFIG_CRASH=$(CRASH)
 
 OBJS = \
