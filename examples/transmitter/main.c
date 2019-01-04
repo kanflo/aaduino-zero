@@ -39,8 +39,6 @@
 #include "spiflash.h"
 #include "rfprotocol.h"
 
-#define MAX_PACKET_SIZE           (64) // Max size of RF packet
-
 static void blinken_halt(uint32_t blink_count)
 {
     while(1) {
