@@ -163,7 +163,10 @@ int main(void)
         rfm69_setPowerDBm(13); // // set output power, +13 dBm
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
         rfm69_setAutoReadRSSI(true);
-        (void) rfm69_setAESEncryption((void*) "sampleEncryptKey", 16);
+        if (strlen(CONFIG_AESKEY) != 16) {
+            dbg_printf("Error: AES key must be 16 bytes!\n");
+        }
+        (void) rfm69_setAESEncryption((void*) CONFIG_AESKEY, 16);
         rfm69link_setNodeId(CONFIG_NODEID);
     }
 

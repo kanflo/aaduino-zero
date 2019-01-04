@@ -11,7 +11,11 @@ NODEID?=42
 # For testing the crash reporting feature
 CRASH?=0
 
-CFLAGS += -DCONFIG_NODEID=$(NODEID) -DCONFIG_CRASH=$(CRASH)
+# RFM69 AES key must be 16 bytes
+AESKEY=sampleEncryptKey
+
+CFLAGS += -DCONFIG_NODEID=$(NODEID) -DCONFIG_AESKEY=\"$(AESKEY)\"
+CFLAGS += -DCONFIG_CRASH=$(CRASH)
 
 OBJS = \
 	$(COMMON)/cli.o \

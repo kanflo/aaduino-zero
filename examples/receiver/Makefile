@@ -8,7 +8,10 @@ LDSCRIPT = $(COMMON)/stm32l052_app.ld
 # Set node id with 'make NODEID=xx'
 NODEID?=1
 
-CFLAGS += -DCONFIG_NODEID=$(NODEID)
+# RFM69 AES key must be 16 bytes
+AESKEY=sampleEncryptKey
+
+CFLAGS += -DCONFIG_NODEID=$(NODEID) -DCONFIG_AESKEY=\"$(AESKEY)\"
 
 OBJS = \
 	$(COMMON)/cli.o \
