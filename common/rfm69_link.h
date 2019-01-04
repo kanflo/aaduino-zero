@@ -72,7 +72,7 @@ void rfm69link_setNetworkId(uint8_t net_id);
  *
  * @return     rfm69_ack for successful transmission
  *             rfm69_ack | rfm69_lat if receiver requested LAT
- *             0 for failure 
+ *             0 for failure
  */
 uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length);
 

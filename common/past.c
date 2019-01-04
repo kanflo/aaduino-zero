@@ -63,7 +63,7 @@
  *    .
  *    .
  * [ 0x00000000 ] [ 0x00000000 ]
- * 
+ *
  * Each of the two Past blocks begin with the Past magic, followed by a past
  * counter which is increased by one for each garbage collection. The counter is
  * never expected to wrap as the number of erase cycles is far less than a 32

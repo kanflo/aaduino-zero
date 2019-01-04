@@ -1,4 +1,4 @@
-    /** Note! This file should be included by pastunits.h to include this 
+    /** Note! This file should be included by pastunits.h to include this
      *  module's units in the past unit list. This means nothing else than
      *  the below definitions may be included.
      */

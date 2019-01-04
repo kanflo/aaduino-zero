@@ -1,7 +1,7 @@
 #ifndef __LIBOPENCM3_ADDITIONS_H__
 #define __LIBOPENCM3_ADDITIONS_H__
 
-/** libopencm3 currently lack support for writing flash on STM32L0 so these 
+/** libopencm3 currently lack support for writing flash on STM32L0 so these
  *  are needed until I (or someone else) get around to open a PR */
 
 

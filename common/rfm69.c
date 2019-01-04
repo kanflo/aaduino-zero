@@ -123,7 +123,7 @@ static const uint8_t rfm69_base_config[][2] =
     /* 0x6F */ { REG_TESTDAGC, RF_DAGC_IMPROVED_LOWBETA0 }, // run DAGC continuously in RX mode for Fading Margin Improvement, recommended default for AfcLowBetaOn=0
     {255, 0}
 
-#if 0    
+#if 0
 #if 1 // Moteino compatible
     /* 0x01 */ { REG_OPMODE, RF_OPMODE_SEQUENCER_ON | RF_OPMODE_LISTEN_OFF | RF_OPMODE_STANDBY },
     /* 0x02 */ { REG_DATAMODUL, RF_DATAMODUL_DATAMODE_PACKET | RF_DATAMODUL_MODULATIONTYPE_FSK | RF_DATAMODUL_MODULATIONSHAPING_00 }, //no shaping
@@ -135,7 +135,7 @@ static const uint8_t rfm69_base_config[][2] =
     /* 0x07 */ { REG_FRFMSB, (RFM69_FREQ==RF69_315MHZ ? RF_FRFMSB_315 : (RFM69_FREQ==RF69_433MHZ ? RF_FRFMSB_433 : (RFM69_FREQ==RF69_868MHZ ? RF_FRFMSB_868 : RF_FRFMSB_915))) },
     /* 0x08 */ { REG_FRFMID, (RFM69_FREQ==RF69_315MHZ ? RF_FRFMID_315 : (RFM69_FREQ==RF69_433MHZ ? RF_FRFMID_433 : (RFM69_FREQ==RF69_868MHZ ? RF_FRFMID_868 : RF_FRFMID_915))) },
     /* 0x09 */ { REG_FRFLSB, (RFM69_FREQ==RF69_315MHZ ? RF_FRFLSB_315 : (RFM69_FREQ==RF69_433MHZ ? RF_FRFLSB_433 : (RFM69_FREQ==RF69_868MHZ ? RF_FRFLSB_868 : RF_FRFLSB_915))) },
-    
+
     // looks like PA1 and PA2 are not implemented on RFM69W, hence the max output power is 13dBm
     // +17dBm and +20dBm are possible on RFM69HW
     // +13dBm formula: Pout=-18+OutputPower (with PA0 or PA1**)
@@ -143,9 +143,9 @@ static const uint8_t rfm69_base_config[][2] =
     // +20dBm formula: Pout=-11+OutputPower (with PA1 and PA2)** and high power PA settings (section 3.3.7 in datasheet)
     ///* 0x11 */ { REG_PALEVEL, RF_PALEVEL_PA0_ON | RF_PALEVEL_PA1_OFF | RF_PALEVEL_PA2_OFF | RF_PALEVEL_OUTPUTPOWER_11111},
     ///* 0x13 */ { REG_OCP, RF_OCP_ON | RF_OCP_TRIM_95 }, //over current protection (default is 95mA)
-    
+
     ///* 0x18*/ { REG_LNA,  RF_LNA_ZIN_200 | RF_LNA_CURRENTGAIN }, //as suggested by mav here: http://lowpowerlab.com/forum/index.php/topic,296.msg1571.html
-    
+
     // RXBW defaults are { REG_RXBW, RF_RXBW_DCCFREQ_010 | RF_RXBW_MANT_24 | RF_RXBW_EXP_5} (RxBw: 10.4khz)
     /* 0x19 */ { REG_RXBW, RF_RXBW_DCCFREQ_010 | RF_RXBW_MANT_16 | RF_RXBW_EXP_2 }, //(BitRate < 2 * RxBw)
     /* 0x25 */ { REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_01 }, //DIO0 is the only IRQ we're using
