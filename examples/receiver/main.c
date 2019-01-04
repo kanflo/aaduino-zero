@@ -35,11 +35,11 @@
 #include "rfm69.h"
 #include "rfm69_link.h"
 #include "spiflash.h"
+#include "rtcdrv.h"
 #include "bootcom.h"
 
 //#define CONFIG_RX_DEBUG
 
-#define NODE_ID                    (1) // I am the gateway
 #define TEMPERATURE_FRAME_TYPE     (0) // Frame type for temperature packet
 #define POWERUP_FRAME_TYPE         (1) // Frame type for powerup packet
 #define FAULT_FRAME_TYPE           (2) // Frame type for hard fault packet
@@ -150,20 +150,21 @@ int main(void)
     dbg_printf("\n\nWelcome to the AAduino Zero Receiver Example\n");
 
     (void) tmp102_init();
-
+    rtcdrv_init();
+    rtcdrv_set_wakeup(1);
     rfm69_setResetPin(RFM_RESET_PORT, RFM_RESET_PIN);
     rfm69_reset();
     if (!rfm69_init(SPI1_RFM_CS_PORT, SPI1_RFM_CS_PIN, false)) {
         dbg_printf("No RFM69CW found\n");
         blinken_halt(1);
     } else {
-        dbg_printf("RFM69CW found\n");
+        dbg_printf("RFM69CW found, my node id is %d\n", CONFIG_NODEID);
         rfm69_sleep(); // init RF module and put it to sleep
         rfm69_setPowerDBm(13); // // set output power, +13 dBm
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
         rfm69_setAutoReadRSSI(true);
         (void) rfm69_setAESEncryption((void*) "sampleEncryptKey", 16);
-        rfm69link_setNodeId(NODE_ID);
+        rfm69link_setNodeId(CONFIG_NODEID);
     }
 
     check_crash();
