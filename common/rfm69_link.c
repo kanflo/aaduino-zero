@@ -69,20 +69,19 @@ void rfm69link_setNetworkId(uint8_t net_id)
  * @param      payload  Payload (max RFM69_LINK_MAX_FRAME bytes)
  * @param[in]  length   Payload length
  *
- * @return     rfm69_ack for successful transmission
- *             rfm69_ack | rfm69_lat if receiver requested LAT
- *             0 for failure
+ * @return     rfm69_tx_status_t
  */
-uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length)
+rfm69_tx_status_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length)
 {
-    uint8_t tx_len, tx_status = 0;
+    rfm69_tx_status_t status = txstatus_ok;
+    uint8_t tx_len;
     uint8_t attempt = 0;
     if (!frame) {
         return 0;
     }
     frame->_dst = dst;
     frame->_src = _node_id;
-    frame->_cntr_flags = ((_counter & FRAME_FLAGS_MASK) << 4) | rfm69_req_ack;
+    frame->_cntr_flags = ((_counter & FRAME_COUNTER_MASK) << FRAME_COUNTER_SHIFT) | (rfm69_req_ack || FRAME_FLAGS_MASK);
     do {
 #ifdef CONFIG_LINK_RX_DEBUG
         dbg_printf("TX attempt #%d\n", attempt);
@@ -107,20 +106,25 @@ uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t leng
 #endif // CONFIG_LINK_RX_DEBUG
                 delay_ms(LINK_TX_RETRY_SLEEP_MS); // @todo: low power sleep
             } else {
+                _counter = (_counter + 1) & FRAME_COUNTER_MASK;
+                frame->rssi = rfm69_getRSSI();
                 if (FRAME_COUNTER(frame->_cntr_flags) != FRAME_COUNTER(ack._cntr_flags)) {
                     dbg_printf("Error: sender acked frame %d when I sent %d\n", FRAME_COUNTER(ack._cntr_flags), FRAME_COUNTER(frame->_cntr_flags));
-                    /** @todo: handle */
+                    return txstatus_err_ack;
                 }
-                tx_status = FRAME_FLAGS(ack._cntr_flags);
-                _counter = (_counter + 1) & FRAME_FLAGS_MASK;
-                frame->rssi = rfm69_getRSSI();
+                if (FRAME_FLAGS(ack._cntr_flags) & rfm69_lat) {
+                    status = txstatus_lat;
+                }
             }
         }
         attempt++;
     } while(attempt < LINK_TX_RETRY_COUNT && tx_len == 0);
+    if (attempt == LINK_TX_RETRY_COUNT) {
+        status = txstatus_err_gw;
+    }
 
     rfm69_sleep();
-    return tx_status;
+    return status;
 }
 
 /**
@@ -156,6 +160,7 @@ bool rfm69link_receiveFrame(uint8_t *src, rfm69_link_frame_t *frame, uint8_t *le
             *length = len - LINK_OVERHEAD;
             *src = frame->_src;
             success = true;
+            /** @todo: handle LAT, need to keep a list of LAT requests from the app layer */
             if (FRAME_FLAGS(frame->_cntr_flags) & rfm69_req_ack) {
                 rfm69_link_frame_t ack; /** @todo: optimize stack usage */
                 ack._src = frame->_dst;

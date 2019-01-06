@@ -172,7 +172,7 @@ int main(void)
     while(1) {
         rfm69_link_frame_t frame;
         uint8_t src, length;
-        if (rfm69link_receiveFrame(&src, &frame, &length)) {
+        if (rfm69link_receiveFrame(&src, &frame, &length) >= txstatus_ok) {
             hw_set_led(true);
 #ifdef CONFIG_RX_DEBUG
             dump_frame(&frame, length);

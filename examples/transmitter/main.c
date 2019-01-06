@@ -63,7 +63,9 @@ static void send_powerup_frame(void)
 
         dbg_printf("Sending powerup to gateway\n");
         /** The powerup message has only a single frame type */
-        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
+        /** @todo: Handle retransmission if this frame failed to deliver */
+        /** @todo: Handle LAT */
+        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");
@@ -112,7 +114,9 @@ static void check_crash(void)
             frame.payload[len++] = (uptime >>  8) & 0xff;
             frame.payload[len++] = (uptime      ) & 0xff;
             dbg_printf("Sending crash report to gateway\n");
-            if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
+            /** @todo: Handle retransmission if this frame failed to deliver */
+            /** @todo: Handle LAT */
+            if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
                 dbg_printf(" Ack RSSI %d\n", frame.rssi);
             } else {
                 dbg_printf(" No response from gateway\n");
@@ -183,7 +187,8 @@ int main(void)
         hw_set_led(true);
         dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
         hw_set_led(false);
-        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len)) {
+        /** @todo: Handle LAT */
+        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");

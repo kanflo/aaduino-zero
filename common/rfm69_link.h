@@ -33,6 +33,19 @@ typedef enum {
     rfm69_lat     = 1 << 2
 } rfm69_link_flag_t;
 
+typedef enum {
+    /** Error: tx failed due to LBT */
+    txstatus_err_lbt = -100,
+    /** Error: gateway did not respond */
+    txstatus_err_gw,
+    /** Error: got ack but sequence in ack mismatched */
+    txstatus_err_ack,
+    /** Success: got ack */
+    txstatus_ok = 0,
+    /** Success: got ack and gateway requested LAT */
+    txstatus_lat
+} rfm69_tx_status_t;
+
 #define FRAME_COUNTER_SHIFT   (4)
 #define FRAME_COUNTER_MASK  (0xf)
 #define FRAME_FLAGS_SHIFT     (0)
@@ -70,11 +83,9 @@ void rfm69link_setNetworkId(uint8_t net_id);
  * @param      payload  Payload (max RFM69_LINK_MAX_FRAME bytes)
  * @param[in]  length   Payload length
  *
- * @return     rfm69_ack for successful transmission
- *             rfm69_ack | rfm69_lat if receiver requested LAT
- *             0 for failure
+ * @return     rfm69_tx_status_t
  */
-uint8_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length);
+rfm69_tx_status_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length);
 
 /**
  * @brief      Receive a frame
