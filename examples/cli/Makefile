@@ -25,7 +25,7 @@ OBJS = \
 	$(COMMON)/spi_driver.o \
 	$(COMMON)/tmp102.o \
 	$(COMMON)/rfm69.o \
-	$(COMMON)/rfm69_link.o \
+	$(COMMON)/rflink.o \
 	$(COMMON)/spiflash.o \
 	$(COMMON)/hw.o \
 	$(COMMON)/event.o \

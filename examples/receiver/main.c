@@ -33,7 +33,7 @@
 #include "tick.h"
 #include "tmp102.h"
 #include "rfm69.h"
-#include "rfm69_link.h"
+#include "rflink.h"
 #include "spiflash.h"
 #include "rtcdrv.h"
 #include "bootcom.h"
@@ -103,7 +103,7 @@ static void handle_fault_frame(uint8_t src, uint8_t *payload, uint8_t len, int r
   * @param packet Pointer to packet data
   * @param len Length of packet
   */
-static void dump_frame(rfm69_link_frame_t *frame, uint8_t len)
+static void dump_frame(rflink_frame_t *frame, uint8_t len)
 {
     dbg_printf("%02x -> %02x ", frame->_src, frame->_dst);
     dbg_printf("cnt:%02d flags:%x : [ ", FRAME_COUNTER(frame->_cntr_flags), FRAME_FLAGS(frame->_cntr_flags));
@@ -164,15 +164,15 @@ int main(void)
             dbg_printf("Error: AES key must be 16 bytes!\n");
         }
         (void) rfm69_setAESEncryption((void*) CONFIG_AESKEY, 16);
-        rfm69link_setNodeId(CONFIG_NODEID);
+        rflink_setNodeId(CONFIG_NODEID);
     }
 
     check_crash();
 
     while(1) {
-        rfm69_link_frame_t frame;
+        rflink_frame_t frame;
         uint8_t src, length;
-        if (rfm69link_receiveFrame(&src, &frame, &length) >= txstatus_ok) {
+        if (rflink_receiveFrame(&src, &frame, &length)) {
             hw_set_led(true);
 #ifdef CONFIG_RX_DEBUG
             dump_frame(&frame, length);

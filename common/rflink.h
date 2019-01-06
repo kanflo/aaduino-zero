@@ -22,16 +22,16 @@
  * THE SOFTWARE.
  */
 
-#ifndef __RFM69_LINK_H__
-#define __RFM69_LINK_H__
+#ifndef __RFLINK_H__
+#define __RFLINK_H__
 
-#define RFM69_LINK_MAX_FRAME   (60)
+#define RFLINK_MAX_FRAME   (60)
 
 typedef enum {
-    rfm69_req_ack = 1 << 0,
-    rfm69_ack     = 1 << 1,
-    rfm69_lat     = 1 << 2
-} rfm69_link_flag_t;
+    rfl_req_ack = 1 << 0,
+    rfl_ack     = 1 << 1,
+    rfl_lat     = 1 << 2
+} rflink_flag_t;
 
 typedef enum {
     /** Error: tx failed due to LBT */
@@ -44,7 +44,7 @@ typedef enum {
     txstatus_ok = 0,
     /** Success: got ack and gateway requested LAT */
     txstatus_lat
-} rfm69_tx_status_t;
+} rflink_tx_status_t;
 
 #define FRAME_COUNTER_SHIFT   (4)
 #define FRAME_COUNTER_MASK  (0xf)
@@ -57,9 +57,9 @@ typedef struct {
     uint8_t _dst;
     uint8_t _src;
     uint8_t _cntr_flags; // [7:4 counter] [3:0 flags]
-    uint8_t payload[RFM69_LINK_MAX_FRAME];
+    uint8_t payload[RFLINK_MAX_FRAME];
     int     rssi; // Valid on RX
-} __attribute__((packed)) rfm69_link_frame_t;
+} __attribute__((packed)) rflink_frame_t;
 
 
 /**
@@ -67,25 +67,25 @@ typedef struct {
  *
  * @param[in]  node_id  Node id
  */
-void rfm69link_setNodeId(uint8_t node_id);
+void rflink_setNodeId(uint8_t node_id);
 
 /**
  * @brief      Set network ID for this link node
  *
  * @param[in]  net_id  Network id
  */
-void rfm69link_setNetworkId(uint8_t net_id);
+void rflink_setNetworkId(uint8_t net_id);
 
 /**
- * @brief      Send frame over RFM69 link
+ * @brief      Send frame over RF link
  *
  * @param[in]  dst      Destinaton address
- * @param      payload  Payload (max RFM69_LINK_MAX_FRAME bytes)
+ * @param      payload  Payload (max RFLINK_MAX_FRAME bytes)
  * @param[in]  length   Payload length
  *
- * @return     rfm69_tx_status_t
+ * @return     rflink_tx_status_t
  */
-rfm69_tx_status_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, uint8_t length);
+rflink_tx_status_t rflink_sendFrame(uint8_t dst, rflink_frame_t *frame, uint8_t length);
 
 /**
  * @brief      Receive a frame
@@ -96,6 +96,6 @@ rfm69_tx_status_t rfm69link_sendFrame(uint8_t dst, rfm69_link_frame_t *frame, ui
  *
  * @return     true if frame was received
  */
-bool rfm69link_receiveFrame(uint8_t *src, rfm69_link_frame_t *frame, uint8_t *length);
+bool rflink_receiveFrame(uint8_t *src, rflink_frame_t *frame, uint8_t *length);
 
-#endif // __RFM69_LINK_H__
+#endif // __RFLINK_H__

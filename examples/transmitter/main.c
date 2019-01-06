@@ -35,7 +35,7 @@
 #include "bootcom.h"
 #include "tmp102.h"
 #include "rfm69.h"
-#include "rfm69_link.h"
+#include "rflink.h"
 #include "spiflash.h"
 #include "rfprotocol.h"
 
@@ -57,7 +57,7 @@ static void blinken_halt(uint32_t blink_count)
  */
 static void send_powerup_frame(void)
 {
-        rfm69_link_frame_t frame;
+        rflink_frame_t frame;
         uint8_t len = 0;
         frame.payload[len++] = rf_powerup;
 
@@ -65,7 +65,7 @@ static void send_powerup_frame(void)
         /** The powerup message has only a single frame type */
         /** @todo: Handle retransmission if this frame failed to deliver */
         /** @todo: Handle LAT */
-        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
+        if (rflink_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");
@@ -92,7 +92,7 @@ static void check_crash(void)
             dbg_printf("uptime  %ds\n", bootcom_get(9));
 
 
-            rfm69_link_frame_t frame;
+            rflink_frame_t frame;
             uint8_t len = 0;
             frame.payload[len++] = rf_hard_fault;
             uint32_t pc = bootcom_get(7);
@@ -116,7 +116,7 @@ static void check_crash(void)
             dbg_printf("Sending crash report to gateway\n");
             /** @todo: Handle retransmission if this frame failed to deliver */
             /** @todo: Handle LAT */
-            if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
+            if (rflink_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
                 dbg_printf(" Ack RSSI %d\n", frame.rssi);
             } else {
                 dbg_printf(" No response from gateway\n");
@@ -156,7 +156,7 @@ int main(void)
             dbg_printf("Error: AES key must be 16 bytes!\n");
         }
         (void) rfm69_setAESEncryption((void*) CONFIG_AESKEY, 16);
-        rfm69link_setNodeId(CONFIG_NODEID);
+        rflink_setNodeId(CONFIG_NODEID);
     }
 
     dbg_printf("Transmitting temperature and battery voltage every %d seconds.\n", period);
@@ -170,7 +170,7 @@ int main(void)
         uint16_t vcc = vcc_measure();
         int32_t t = 1000 * tmp102_readTempC();
 
-        rfm69_link_frame_t frame;
+        rflink_frame_t frame;
         uint8_t len = 0;
         frame.payload[len++] = rf_temperature;
         frame.payload[len++] = (t >> 24) & 0xff;
@@ -188,7 +188,7 @@ int main(void)
         dbg_printf("[%d] Temperature is %d.%d°C, vcc is %d.%02dV\n", counter, t/1000, frac, vcc/1000, (vcc%1000)/10);
         hw_set_led(false);
         /** @todo: Handle LAT */
-        if (rfm69link_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
+        if (rflink_sendFrame(CONFIG_GATEWAYID, &frame, len) >= txstatus_ok) {
             dbg_printf(" Ack RSSI %d\n", frame.rssi);
         } else {
             dbg_printf(" No response from gateway\n");

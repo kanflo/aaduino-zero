@@ -37,7 +37,7 @@
 #include "tick.h"
 #include "tmp102.h"
 #include "rfm69.h"
-#include "rfm69_link.h"
+#include "rflink.h"
 #include "spiflash.h"
 #include "past.h"
 #include "pastunits.h"
@@ -368,15 +368,15 @@ static void rfm_init(void)
         rfm69_setCSMA(true); // enable CSMA/CA algorithm
         rfm69_setAutoReadRSSI(true);
         (void) rfm69_setAESEncryption((void*) aesKey, 16);
-        rfm69link_setNodeId(*node_id);
-        rfm69link_setNetworkId(*network_id);
+        rflink_setNodeId(*node_id);
+        rflink_setNetworkId(*network_id);
         dbg_printf("RFM69 init ok\n");
     }
 }
 
 static void rfm_tx(uint32_t dst, char *data)
 {
-    rfm69_link_frame_t frame;
+    rflink_frame_t frame;
     dst &= 0xff;
 #if 0
     dbg_printf("Sending %d bytes to %d\n", strlen(data), dst);
@@ -384,7 +384,7 @@ static void rfm_tx(uint32_t dst, char *data)
     dump_mem((uint32_t) data, strlen(data));
 #endif
     memcpy((void*) frame.payload, (void*) data, strlen(data));
-    uint8_t status = rfm69link_sendFrame(dst, &frame, strlen(data));
+    uint8_t status = rflink_sendFrame(dst, &frame, strlen(data));
     if (!status) {
         dbg_printf("ERROR:No response\n");
     } else {
